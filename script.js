@@ -42,23 +42,40 @@ const termDictionary = {
 };
 
 let currentUser = null;
+let isPiBrowser = false;
 
 async function initPiSDK() {
     try {
+        console.log('=== Pi SDK 初始化开始 ===');
+        console.log('当前URL:', window.location.href);
+        console.log('User Agent:', navigator.userAgent);
+        
+        isPiBrowser = /PiBrowser/i.test(navigator.userAgent);
+        console.log('是否在Pi Browser中:', isPiBrowser);
+        
+        if (!isPiBrowser) {
+            console.warn('警告：不在Pi Browser中运行，支付功能可能无法正常工作');
+        }
+        
         await Pi.init({
             version: "2.0",
             sandbox: true
         });
+        
         console.log('Pi SDK initialized successfully');
+        console.log('Pi object:', typeof Pi, Object.keys(Pi));
+        console.log('Pi.createPayment exists:', typeof Pi.createPayment);
+        
     } catch (error) {
         console.error('Pi SDK initialization failed:', error);
-        showError('SDK初始化失败，请刷新页面重试');
+        showError('SDK初始化失败：' + error.message);
     }
 }
 
 async function authenticate() {
     try {
         showLoading(true);
+        console.log('=== 开始授权 ===');
         
         const authResult = await Pi.authenticate(['username'], {
             onIncompletePaymentFound: (payment) => {
@@ -71,12 +88,15 @@ async function authenticate() {
             }
         });
 
+        console.log('授权结果:', authResult);
+
         if (authResult && authResult.user) {
             currentUser = authResult.user;
             document.getElementById('authSection').style.display = 'none';
             document.getElementById('querySection').style.display = 'block';
             document.getElementById('username').textContent = `欢迎, ${currentUser.username}!`;
             document.getElementById('authStatus').textContent = '';
+            console.log('授权成功，用户:', currentUser);
         } else {
             showError('授权失败，请重试');
         }
@@ -90,7 +110,14 @@ async function authenticate() {
 
 async function createPayment(term) {
     try {
+        console.log('=== 开始创建支付 ===');
         showLoading(true);
+        
+        if (!isPiBrowser) {
+            showError('请使用Pi Browser打开此应用以完成支付');
+            showLoading(false);
+            return;
+        }
         
         const paymentData = {
             amount: 0.01,
@@ -101,7 +128,12 @@ async function createPayment(term) {
             }
         };
 
-        console.log('Creating payment with data:', paymentData);
+        console.log('支付数据:', paymentData);
+        console.log('Pi.createPayment 类型:', typeof Pi.createPayment);
+
+        if (typeof Pi.createPayment !== 'function') {
+            throw new Error('Pi.createPayment 不是一个函数，SDK可能未正确加载');
+        }
 
         const payment = await Pi.createPayment(paymentData, {
             onReadyForServerApproval: (paymentId) => {
@@ -127,6 +159,7 @@ async function createPayment(term) {
         
     } catch (error) {
         console.error('Payment creation error:', error);
+        console.error('Error stack:', error.stack);
         showError('支付创建失败：' + (error.message || '未知错误'));
         showLoading(false);
     }
@@ -134,7 +167,8 @@ async function createPayment(term) {
 
 async function completePayment(paymentId, txid, term) {
     try {
-        console.log('Completing payment:', paymentId, txid);
+        console.log('=== 完成支付 ===');
+        console.log('Payment ID:', paymentId, 'TXID:', txid);
         
         await Pi.submitPaymentTransaction(paymentId, txid);
         
@@ -166,7 +200,7 @@ function showError(message) {
     
     setTimeout(() => {
         errorDiv.style.display = 'none';
-    }, 5000);
+    }, 8000);
 }
 
 function showLoading(show) {
@@ -191,6 +225,7 @@ async function searchTerm() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('=== 页面加载完成 ===');
     await initPiSDK();
     
     document.getElementById('authBtn').addEventListener('click', authenticate);
