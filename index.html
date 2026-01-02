@@ -1,389 +1,66 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pi术语查询 - 沙盒正式版</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
-    body { max-width: 600px; margin: 20px auto; padding: 0 20px; }
-    h1 { color: #6f42c1; margin-bottom: 20px; }
-    .btn { 
-      background: #6f42c1; color: white; border: none; 
-      padding: 12px 24px; border-radius: 8px; cursor: pointer; 
-      font-size: 16px; margin: 10px 0; width: 100%;
-      transition: background 0.3s;
-    }
-    .btn:hover { background: #5a32a3; }
-    .btn:disabled { background: #ccc; cursor: not-allowed; }
-    .input-box { 
-      width: 100%; padding: 12px; border: 1px solid #ddd; 
-      border-radius: 8px; margin: 10px 0; font-size: 16px;
-    }
-    .status { 
-      padding: 12px; border-radius: 8px; margin: 10px 0; 
-      font-size: 14px; min-height: 20px;
-    }
-    .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-    .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-    .loading { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-    .result { 
-      margin-top: 20px; padding: 20px; background: #f8f9fa; 
-      border-radius: 8px; border-left: 4px solid #6f42c1;
-      display: none;
-    }
-    .debug-info {
-      margin-top: 20px; padding: 10px; background: #f0f0f0;
-      border-radius: 5px; font-size: 12px; color: #666;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi术语查询（官方规范版）</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: sans-serif; }
+        .container { max-width: 400px; margin: 20px auto; padding: 20px; background: #f5f5f5; border-radius: 8px; }
+        header { text-align: center; margin-bottom: 20px; }
+        .auth-status { margin: 10px 0; padding: 10px; background: #e8f0fe; border-radius: 4px; text-align: center; }
+        #authBtn { padding: 10px 20px; background: #4285f4; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .query-section { margin: 20px 0; }
+        .query-section label { display: block; margin-bottom: 5px; }
+        .query-section input { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        #queryBtn { width: 100%; padding: 10px; background: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        #queryBtn:disabled { background: #bbb; cursor: not-allowed; }
+        .payment-info { margin: 10px 0; padding: 10px; border-radius: 4px; text-align: center; }
+        .payment-info.success { background: #e8f5e9; color: #2e7d32; }
+        .payment-info.error { background: #ffebee; color: #c62828; }
+        .definition-section { margin: 20px 0; padding: 15px; background: white; border-radius: 4px; display: none; }
+    </style>
+    <!-- 官方SDK引入（必须用此链接） -->
+    <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+    <!-- 官方规范初始化（仅一次） -->
+    <script>
+        // 初始化SDK：版本2.0 + 沙盒模式（开发环境）
+        Pi.init({
+            version: "2.0",
+            sandbox: true // 生产环境改为false
+        });
+    </script>
 </head>
 <body>
-  <h1>Pi术语查询（沙盒测试）</h1>
+    <div class="container">
+        <header>
+            <h1>Pi术语查询</h1>
+            <p>支付0.01 Pi查询Pi生态术语释义</p>
+        </header>
 
-  <!-- Pi账号授权按钮 -->
-  <button id="authBtn" class="btn">第一步：授权Pi账号</button>
+        <!-- 身份验证区域 -->
+        <div class="auth-status" id="authStatus">
+            <button id="authBtn">点击授权Pi账号</button>
+        </div>
 
-  <!-- 术语输入框 -->
-  <input 
-    type="text" 
-    id="termInput" 
-    class="input-box" 
-    placeholder="请输入要查询的Pi术语（如node/mining）"
-    disabled
-  >
+        <!-- 查询区域 -->
+        <div class="query-section">
+            <label for="termInput">输入Pi术语（如Node）：</label>
+            <input type="text" id="termInput" placeholder="Node, Testnet, Mainnet..." disabled>
+            <button id="queryBtn" disabled>查询（需支付0.01 Pi）</button>
+        </div>
 
-  <!-- 支付查询按钮 -->
-  <button id="payBtn" class="btn" disabled>第二步：支付0.01测试Pi并查询</button>
+        <!-- 支付状态提示 -->
+        <div class="payment-info" id="paymentInfo"></div>
 
-  <!-- 状态提示栏 -->
-  <div id="status" class="status"></div>
+        <!-- 释义展示 -->
+        <div class="definition-section" id="definitionSection">
+            <h3>术语释义</h3>
+            <div id="definition"></div>
+        </div>
+    </div>
 
-  <!-- 术语结果展示 -->
-  <div id="result" class="result">
-    <h3 id="termTitle"></h3>
-    <p id="termDesc" style="margin-top: 10px; line-height: 1.6;"></p>
-  </div>
-
-  <!-- 调试信息（可选） -->
-  <div class="debug-info">
-    后端状态: <span id="backendStatus">未检测</span> | 
-    支付ID: <span id="currentPaymentId">无</span>
-  </div>
-
-  <!-- 引入Pi沙盒SDK -->
-  <script src="https://sandbox.minepi.com/pi-sdk.js"></script>
-  <script>
-    // 全局变量
-    let piUser = null;
-    let currentPayment = null;
-    let pollInterval = null;
-    
-    // 🔥 重要：改为你的后端地址
-    const API_BASE = "https://chinese-cnbg.vercel.app";
-    
-    // Pi术语库
-    const PI_TERMS = {
-      "node": "节点：Pi网络中的分布式服务器节点，负责维护区块链的共识与安全，是Pi网络的基础组成部分。",
-      "mining": "挖矿：在Pi网络中，用户通过贡献闲置算力、参与节点验证等方式获取Pi币的过程，Pi采用轻量级挖矿机制，手机即可参与。",
-      "wallet": "钱包：存储、管理和交易Pi币的工具，分为冷钱包（离线）和热钱包（在线），Pi官方钱包内置在App中。",
-      "testnet": "测试网：Pi网络的测试环境，用于开发者测试功能、调试支付流程，测试网Pi币无实际价值。",
-      "consensus": "共识：Pi网络中所有节点对区块链数据达成一致的机制，Pi采用改进的Stellar共识协议（SCP）。"
-    };
-
-    // DOM元素
-    const authBtn = document.getElementById('authBtn');
-    const termInput = document.getElementById('termInput');
-    const payBtn = document.getElementById('payBtn');
-    const statusBox = document.getElementById('status');
-    const resultBox = document.getElementById('result');
-    const termTitle = document.getElementById('termTitle');
-    const termDesc = document.getElementById('termDesc');
-    const backendStatusEl = document.getElementById('backendStatus');
-    const paymentIdEl = document.getElementById('currentPaymentId');
-
-    // 页面加载时检查后端
-    window.addEventListener('load', async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/health`);
-        const data = await res.json();
-        backendStatusEl.textContent = data.status === 'ok' ? '正常' : '异常';
-        backendStatusEl.style.color = data.status === 'ok' ? 'green' : 'red';
-      } catch (err) {
-        backendStatusEl.textContent = '无法连接';
-        backendStatusEl.style.color = 'red';
-      }
-    });
-
-    // ========== 1. Pi账号授权 ==========
-    authBtn.addEventListener('click', async () => {
-      try {
-        authBtn.disabled = true;
-        setStatus("loading", "正在跳转到Pi授权页面...");
-
-        const authResult = await Pi.authenticateWithPopup({
-          scope: ["payments", "username"],
-          sandbox: true
-        });
-
-        if (authResult && authResult.user) {
-          piUser = authResult.user;
-          setStatus("success", `授权成功！欢迎 ${piUser.username}`);
-          termInput.disabled = false;
-          payBtn.disabled = false;
-          
-          // 测试后端连接
-          const testRes = await fetch(`${API_BASE}/api/health`);
-          if (testRes.ok) {
-            console.log("后端连接正常");
-          }
-        } else {
-          throw new Error("未获取到用户信息");
-        }
-      } catch (err) {
-        setStatus("error", `授权失败：${err.message}`);
-        authBtn.disabled = false;
-        console.error("授权错误:", err);
-      }
-    });
-
-    // ========== 2. 支付+查询逻辑（修改版） ==========
-    payBtn.addEventListener('click', async () => {
-      const term = termInput.value.trim().toLowerCase();
-      
-      if (!term) {
-        setStatus("error", "请输入要查询的术语");
-        return;
-      }
-      if (!PI_TERMS[term]) {
-        setStatus("error", `暂未收录「${term}」`);
-        return;
-      }
-      if (!piUser || !piUser.uid) {
-        setStatus("error", "请先授权Pi账号");
-        return;
-      }
-
-      try {
-        payBtn.disabled = true;
-        termInput.disabled = true;
-        setStatus("loading", "正在创建支付订单...");
-
-        // 🔥 关键修改：调用自己的后端创建支付
-        const createRes = await fetch(`${API_BASE}/api/create-payment`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: 0.01,
-            memo: `查询Pi术语：${term}`,
-            userUid: piUser.uid,
-            metadata: { queryTerm: term }
-          })
-        });
-
-        const createData = await createRes.json();
-        
-        if (!createData.success) {
-          throw new Error(createData.error || "创建支付失败");
-        }
-
-        const payment = createData.payment;
-        currentPayment = payment;
-        paymentIdEl.textContent = payment.identifier || '未知';
-        
-        setStatus("loading", `支付订单创建成功，等待批准...`);
-
-        // 🔥 关键修改：使用正确的 Pi SDK v2.0 API
-        setStatus("loading", "请在弹出的Pi钱包中确认支付...");
-        
-        const piPayment = await Pi.createPayment(
-          {
-            amount: payment.amount,
-            memo: payment.memo,
-            metadata: payment.metadata || {}
-          },
-          {
-            onReadyForServerApproval: async (paymentId) => {
-              console.log("支付已创建，等待服务器批准:", paymentId);
-              setStatus("loading", "正在批准支付...");
-              
-              try {
-                // 调用后端批准接口
-                const approveRes = await fetch(`${API_BASE}/api/approve-payment`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    paymentId: paymentId,
-                    amount: payment.amount
-                  })
-                });
-                
-                const approveData = await approveRes.json();
-                if (!approveData.success) {
-                  throw new Error(approveData.error || "批准失败");
-                }
-                
-                console.log("支付已批准:", paymentId);
-                setStatus("loading", "支付已批准，等待完成...");
-              } catch (err) {
-                console.error("批准支付失败:", err);
-                setStatus("error", `批准失败：${err.message}`);
-                resetUI();
-                throw err;
-              }
-            },
-            onReadyForServerCompletion: async (paymentId, txid) => {
-              console.log("支付已完成，等待服务器确认:", paymentId, txid);
-              setStatus("loading", "正在完成支付...");
-              
-              try {
-                // 调用后端完成接口
-                const completeRes = await fetch(`${API_BASE}/api/complete-payment`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    paymentId: paymentId,
-                    txid: txid
-                  })
-                });
-                
-                const completeData = await completeRes.json();
-                if (!completeData.success) {
-                  throw new Error(completeData.error || "完成失败");
-                }
-                
-                console.log("支付完成:", paymentId);
-                setStatus("success", "🎉 支付成功！");
-                showTermResult(term);
-                resetUI();
-              } catch (err) {
-                console.error("完成支付失败:", err);
-                setStatus("error", `完成失败：${err.message}`);
-                resetUI();
-              }
-            },
-            onCancel: () => {
-              console.log("支付已取消");
-              setStatus("error", "支付已取消");
-              resetUI();
-            },
-            onError: (error) => {
-              console.error("支付错误:", error);
-              setStatus("error", `支付错误：${error.message || error}`);
-              resetUI();
-            }
-          }
-        );
-        
-      } catch (err) {
-        console.error("支付流程错误:", err);
-        setStatus("error", `支付失败：${err.message}`);
-        resetUI();
-      }
-    });
-
-    // ========== 3. 轮询支付状态 ==========
-    function startPollingPayment(paymentId, term) {
-      if (pollInterval) clearInterval(pollInterval);
-      
-      let attempts = 0;
-      const maxAttempts = 120; // 2分钟超时
-      
-      pollInterval = setInterval(async () => {
-        attempts++;
-        
-        try {
-          const res = await fetch(`${API_BASE}/api/payment/${paymentId}`);
-          const data = await res.json();
-          
-          if (!data.success) {
-            throw new Error(data.error);
-          }
-          
-          const payment = data.data;
-          console.log(`支付状态[${attempts}]:`, payment.status);
-          
-          // 处理不同状态
-          switch (payment.status) {
-            case "approved":
-              setStatus("loading", "支付已批准，等待完成...");
-              break;
-              
-            case "completed":
-              clearInterval(pollInterval);
-              setStatus("success", "🎉 支付成功！");
-              showTermResult(term);
-              resetUI();
-              break;
-              
-            case "expired":
-              clearInterval(pollInterval);
-              setStatus("error", "支付超时，请重试");
-              resetUI();
-              break;
-              
-            case "cancelled":
-              clearInterval(pollInterval);
-              setStatus("error", "支付已取消");
-              resetUI();
-              break;
-              
-            default:
-              if (attempts >= maxAttempts) {
-                clearInterval(pollInterval);
-                setStatus("error", "支付处理超时");
-                resetUI();
-              }
-          }
-        } catch (err) {
-          console.error("轮询错误:", err);
-          if (attempts >= maxAttempts) {
-            clearInterval(pollInterval);
-            setStatus("error", "查询超时");
-            resetUI();
-          }
-        }
-      }, 1000); // 每秒查询一次
-    }
-
-    // ========== 辅助函数 ==========
-    function showTermResult(term) {
-      termTitle.textContent = term;
-      termDesc.textContent = PI_TERMS[term];
-      resultBox.style.display = "block";
-      
-      // 添加到历史记录（可选）
-      if (localStorage) {
-        const history = JSON.parse(localStorage.getItem('pi_query_history') || '[]');
-        history.unshift({
-          term: term,
-          time: new Date().toLocaleString(),
-          desc: PI_TERMS[term].substring(0, 50) + '...'
-        });
-        localStorage.setItem('pi_query_history', JSON.stringify(history.slice(0, 10)));
-      }
-    }
-
-    function resetUI() {
-      payBtn.disabled = false;
-      termInput.disabled = false;
-      if (pollInterval) {
-        clearInterval(pollInterval);
-        pollInterval = null;
-      }
-      paymentIdEl.textContent = '无';
-    }
-
-    function setStatus(type, text) {
-      statusBox.className = `status ${type}`;
-      statusBox.textContent = text;
-      console.log(`[状态] ${type}: ${text}`);
-    }
-
-    // 页面卸载时清理
-    window.addEventListener('beforeunload', () => {
-      if (pollInterval) clearInterval(pollInterval);
-    });
-  </script>
+    <script src="script.js"></script>
 </body>
 </html>
