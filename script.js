@@ -103,42 +103,48 @@ async function createPayment(term) {
 
         console.log('Creating payment with data:', paymentData);
 
-        const payment = await Pi.createPayment(paymentData);
+        const payment = await Pi.createPayment(paymentData, {
+            onReadyForServerApproval: (paymentId) => {
+                console.log('Payment ready for server approval:', paymentId);
+            },
+            onReadyForServerCompletion: (paymentId, txid) => {
+                console.log('Payment ready for server completion:', paymentId, txid);
+                completePayment(paymentId, txid, term);
+            },
+            onCancelled: (paymentId) => {
+                console.log('Payment cancelled:', paymentId);
+                showError('支付已取消');
+                showLoading(false);
+            },
+            onError: (error, payment) => {
+                console.error('Payment error:', error, payment);
+                showError('支付错误：' + (error.message || '未知错误'));
+                showLoading(false);
+            }
+        });
         
         console.log('Payment created:', payment);
         
-        return payment;
     } catch (error) {
         console.error('Payment creation error:', error);
-        throw new Error('支付创建失败：' + (error.message || '未知错误'));
-    } finally {
+        showError('支付创建失败：' + (error.message || '未知错误'));
         showLoading(false);
     }
 }
 
-async function handlePaymentCompletion(paymentId) {
+async function completePayment(paymentId, txid, term) {
     try {
-        showLoading(true);
+        console.log('Completing payment:', paymentId, txid);
         
-        const payment = await Pi.getPayment(paymentId);
-        console.log('Payment status:', payment);
-
-        if (payment && payment.status === 'completed') {
-            const term = payment.metadata.term;
-            displayResult(term);
-            return true;
-        } else if (payment && payment.status === 'failed') {
-            showError('支付失败，请重试');
-            return false;
-        } else {
-            showError('支付处理中，请稍后查看');
-            return false;
-        }
+        await Pi.submitPaymentTransaction(paymentId, txid);
+        
+        console.log('Payment completed successfully');
+        displayResult(term);
+        showLoading(false);
+        
     } catch (error) {
-        console.error('Payment completion check error:', error);
-        showError('支付状态检查失败');
-        return false;
-    } finally {
+        console.error('Payment completion error:', error);
+        showError('支付完成失败：' + (error.message || '未知错误'));
         showLoading(false);
     }
 }
@@ -181,20 +187,7 @@ async function searchTerm() {
         return;
     }
 
-    try {
-        const payment = await createPayment(term);
-        
-        if (payment && payment.identifier) {
-            const success = await handlePaymentCompletion(payment.identifier);
-            
-            if (!success) {
-                showError('支付未完成，请检查您的Pi钱包');
-            }
-        }
-    } catch (error) {
-        console.error('Search error:', error);
-        showError(error.message || '查询失败，请重试');
-    }
+    await createPayment(term);
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
