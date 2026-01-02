@@ -1,64 +1,43 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pi术语查询（官方规范版）</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: sans-serif; }
-        .container { max-width: 400px; margin: 20px auto; padding: 20px; background: #f5f5f5; border-radius: 8px; }
-        header { text-align: center; margin-bottom: 20px; }
-        .auth-status { margin: 10px 0; padding: 10px; background: #e8f0fe; border-radius: 4px; text-align: center; }
-        #authBtn { padding: 10px 20px; background: #4285f4; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        .query-section { margin: 20px 0; }
-        .query-section label { display: block; margin-bottom: 5px; }
-        .query-section input { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; }
-        #queryBtn { width: 100%; padding: 10px; background: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        #queryBtn:disabled { background: #bbb; cursor: not-allowed; }
-        .payment-info { margin: 10px 0; padding: 10px; border-radius: 4px; text-align: center; }
-        .payment-info.success { background: #e8f5e9; color: #2e7d32; }
-        .payment-info.error { background: #ffebee; color: #c62828; }
-        .definition-section { margin: 20px 0; padding: 15px; background: white; border-radius: 4px; display: none; }
-    </style>
-    <!-- 官方SDK引入（必须用此链接） -->
+    <title>Pi术语查询应用</title>
+    <link rel="stylesheet" href="style.css">
     <script src="https://sdk.minepi.com/pi-sdk.js"></script>
-    <!-- 官方规范初始化（仅一次） -->
-    <script>
-        // 初始化SDK：版本2.0 + 沙盒模式（开发环境）
-        Pi.init({
-            version: "2.0",
-            sandbox: true // 生产环境改为false
-        });
-    </script>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Pi术语查询</h1>
-            <p>支付0.01 Pi查询Pi生态术语释义</p>
+            <h1>🔍 Pi术语查询</h1>
+            <p class="subtitle">支付0.01 Pi币查询Pi生态术语中文释义</p>
         </header>
 
-        <!-- 身份验证区域 -->
-        <div class="auth-status" id="authStatus">
-            <button id="authBtn">点击授权Pi账号</button>
+        <div class="auth-section" id="authSection">
+            <button id="authBtn" class="btn btn-primary">点击授权Pi账号</button>
+            <p id="authStatus" class="status-text"></p>
         </div>
 
-        <!-- 查询区域 -->
-        <div class="query-section">
-            <label for="termInput">输入Pi术语（如Node）：</label>
-            <input type="text" id="termInput" placeholder="Node, Testnet, Mainnet..." disabled>
-            <button id="queryBtn" disabled>查询（需支付0.01 Pi）</button>
+        <div class="query-section" id="querySection" style="display: none;">
+            <div class="user-info">
+                <span id="username"></span>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="termInput" placeholder="输入Pi术语（如：Node）" autocomplete="off">
+                <button id="searchBtn" class="btn btn-secondary">查询术语</button>
+            </div>
+
+            <div id="result" class="result-container"></div>
         </div>
 
-        <!-- 支付状态提示 -->
-        <div class="payment-info" id="paymentInfo"></div>
-
-        <!-- 释义展示 -->
-        <div class="definition-section" id="definitionSection">
-            <h3>术语释义</h3>
-            <div id="definition"></div>
+        <div class="loading" id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>处理中...</p>
         </div>
+
+        <div class="error-message" id="errorMessage" style="display: none;"></div>
     </div>
 
     <script src="script.js"></script>
