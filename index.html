@@ -3,43 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pi术语查询应用</title>
+    <title>Pi Network 支付应用</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Pi Network JavaScript SDK -->
     <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>🔍 Pi术语查询</h1>
-            <p class="subtitle">支付0.01 Pi币查询Pi生态术语中文释义</p>
-        </header>
-
-        <div class="auth-section" id="authSection">
-            <button id="authBtn" class="btn btn-primary">点击授权Pi账号</button>
-            <p id="authStatus" class="status-text"></p>
+        <h1>Pi Network 支付应用</h1>
+        
+        <!-- 用户信息区域 -->
+        <div id="userInfo" class="hidden">
+            <p>已登录用户: <span id="username"></span></p>
+            <button id="logoutBtn">退出登录</button>
         </div>
-
-        <div class="query-section" id="querySection" style="display: none;">
-            <div class="user-info">
-                <span id="username"></span>
-            </div>
-
-            <div class="input-group">
-                <input type="text" id="termInput" placeholder="输入Pi术语（如：Node）" autocomplete="off">
-                <button id="searchBtn" class="btn btn-secondary">查询术语</button>
-            </div>
-
-            <div id="result" class="result-container"></div>
+        
+        <!-- 登录按钮 -->
+        <div id="loginSection">
+            <button id="loginBtn" onclick="authenticate()">使用 Pi Network 登录</button>
         </div>
-
-        <div class="loading" id="loading" style="display: none;">
+        
+        <!-- 支付表单 -->
+        <div id="paymentSection" class="hidden">
+            <h2>创建支付</h2>
+            <form id="paymentForm">
+                <div class="form-group">
+                    <label for="amount">金额 (Pi):</label>
+                    <input type="number" id="amount" name="amount" step="0.01" min="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="memo">备注:</label>
+                    <input type="text" id="memo" name="memo" maxlength="200">
+                </div>
+                <button type="submit" id="payBtn">支付</button>
+            </form>
+        </div>
+        
+        <!-- 加载指示器 -->
+        <div id="loading" class="hidden">
             <div class="spinner"></div>
-            <p>处理中...</p>
+            <p>加载中...</p>
         </div>
-
-        <div class="error-message" id="errorMessage" style="display: none;"></div>
+        
+        <!-- 错误信息 -->
+        <div id="error" class="hidden"></div>
     </div>
-
+    
     <script src="script.js"></script>
 </body>
 </html>
