@@ -1,271 +1,274 @@
-// Pi Network 应用配置
-const PI_CONFIG = {
-    // 确保使用您自己的应用ID
-    appId: 'your-pi-app-id-here',
-    version: '1.0',
-    sandbox: true // 在开发阶段使用沙盒模式
+// 全局配置
+let isAuthenticated = false;
+let currentUser = null;
+// 你的后端Vercel域名
+const BACKEND_URL = "https://chinese-cnbg.vercel.app";
+
+// 术语库
+const termDictionary = {
+    "node": { 
+        name: "Node", 
+        definition: "节点：Pi网络的核心计算单元，负责维护网络安全和共识机制。节点是Pi区块链的基础设施，确保网络的去中心化和安全性。" 
+    },
+    "testnet": { 
+        name: "Testnet", 
+        definition: "测试网：Pi的测试环境，用于开发者测试功能和调试支付流程。测试网中的Pi币没有实际价值，仅用于开发测试。" 
+    },
+    "mainnet": { 
+        name: "Mainnet", 
+        definition: "主网：Pi的正式运行网络，支持真实Pi币交易。主网是Pi Network的正式生产环境，所有真实的Pi币交易都在主网上进行。" 
+    },
+    "staking": { 
+        name: "Staking", 
+        definition: "质押：锁定Pi币以获得额外奖励的机制。用户可以将Pi币锁定一段时间，作为对网络安全的贡献，从而获得额外的Pi币奖励。" 
+    },
+    "mining": { 
+        name: "Mining", 
+        definition: "挖矿：参与Pi网络共识以获取Pi币的过程。Pi采用轻量级挖矿机制，用户只需每天点击一次即可参与挖矿，无需消耗大量计算资源。" 
+    },
+    "balance": { 
+        name: "Balance", 
+        definition: "余额：用户Pi钱包中可用的Pi币数量。余额包括可转账的Pi币和已锁定的Pi币（用于质押等）。" 
+    },
+    "security circle": { 
+        name: "Security Circle", 
+        definition: "安全圈：由用户信任的人组成的网络，用于增强Pi网络的安全性和去中心化。安全圈成员相互验证身份，提高网络整体安全性。" 
+    },
+    "developer portal": { 
+        name: "Developer Portal", 
+        definition: "开发者门户：Pi Network为开发者提供的平台，用于注册应用、获取API密钥、管理应用设置和查看应用数据。" 
+    },
+    "sdk": { 
+        name: "SDK", 
+        definition: "软件开发工具包：Pi Network提供的开发工具，帮助开发者集成Pi支付功能到自己的应用中。SDK包括前端JavaScript SDK和后端API。" 
+    },
+    "checklist": { 
+        name: "Checklist", 
+        definition: "检查清单：Pi Network应用开发过程中需要完成的步骤列表，包括应用注册、API配置、支付集成、测试等。" 
+    }
 };
 
-// 全局变量
-let piUser = null;
-let pi = null;
-
-// DOM 元素
-const userInfo = document.getElementById('userInfo');
-const username = document.getElementById('username');
-const logoutBtn = document.getElementById('logoutBtn');
-const loginSection = document.getElementById('loginSection');
-const paymentSection = document.getElementById('paymentSection');
-const paymentForm = document.getElementById('paymentForm');
-const loading = document.getElementById('loading');
-const error = document.getElementById('error');
-
-// 页面加载完成后初始化 Pi SDK
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('页面加载完成，初始化 Pi SDK...');
-    initPiSDK();
-});
-
-// 初始化 Pi SDK
-function initPiSDK() {
-    try {
-        if (typeof Pi === 'undefined') {
-            showError('Pi SDK 未加载，请检查网络连接');
-            return;
-        }
-        
-        pi = Pi;
-        
-        // 初始化 SDK
-        pi.init({
-            version: PI_CONFIG.version,
-            sandbox: PI_CONFIG.sandbox,
-            scope: ['username', 'payments'] // 请求必要的权限
-        }).then(function() {
-            console.log('Pi SDK 初始化成功');
-            
-            // 检查用户是否已经登录
-            checkLoginStatus();
-        }).catch(function(err) {
-            console.error('Pi SDK 初始化失败:', err);
-            showError('Pi SDK 初始化失败: ' + err.message);
-        });
-        
-    } catch (err) {
-        console.error('初始化过程中发生错误:', err);
-        showError('初始化过程中发生错误: ' + err.message);
-    }
-}
-
-// 检查用户登录状态
-function checkLoginStatus() {
-    if (!pi) return;
-    
-    showLoading(true);
-    
-    pi.authenticate({
-        onApproved: function(authResult) {
-            console.log('用户已登录:', authResult);
-            handleAuthSuccess(authResult);
-        },
-        onDenied: function() {
-            console.log('用户拒绝登录');
-            showLoading(false);
-        },
-        onError: function(err) {
-            console.error('登录检查错误:', err);
-            showError('登录检查错误: ' + err.message);
-            showLoading(false);
-        }
+// 页面加载完成初始化
+document.addEventListener('DOMContentLoaded', () => {
+    // 初始化Pi SDK（必须开启sandbox: true，解决支付超时）
+    Pi.init({ 
+        version: "2.0", 
+        sandbox: true 
     });
-}
+    
+    console.log("Pi SDK 初始化完成");
+    
+    // 绑定事件
+    document.getElementById('authBtn').addEventListener('click', authenticateUser);
+    document.getElementById('queryBtn').addEventListener('click', handleQuery);
+    document.getElementById('termInput').addEventListener('input', toggleQueryBtn);
+    
+    // 检查后端连接
+    checkBackendConnection();
+});
 
-// 处理用户认证成功
-function handleAuthSuccess(authResult) {
+// 检查后端连接
+async function checkBackendConnection() {
     try {
-        piUser = authResult.user;
-        
-        // 更新 UI
-        username.textContent = piUser.username;
-        userInfo.classList.remove('hidden');
-        loginSection.classList.add('hidden');
-        paymentSection.classList.remove('hidden');
-        showLoading(false);
-        clearError();
-        
-        console.log('用户认证成功，显示支付界面');
-        
-    } catch (err) {
-        console.error('处理认证结果时出错:', err);
-        showError('处理登录信息时出错: ' + err.message);
-        showLoading(false);
-    }
-}
-
-// 用户认证函数
-function authenticate() {
-    if (!pi) {
-        showError('Pi SDK 未初始化');
-        return;
-    }
-    
-    showLoading(true);
-    clearError();
-    
-    console.log('开始用户认证...');
-    
-    pi.authenticate({
-        scope: ['username', 'payments'],
-        onApproved: function(authResult) {
-            console.log('认证成功:', authResult);
-            handleAuthSuccess(authResult);
-        },
-        onDenied: function() {
-            console.log('用户拒绝认证');
-            showError('用户拒绝登录');
-            showLoading(false);
-        },
-        onError: function(err) {
-            console.error('认证错误:', err);
-            showError('登录失败: ' + err.message);
-            showLoading(false);
+        const res = await fetch(`${BACKEND_URL}/api/health`);
+        const data = await res.json();
+        if (data.status === 'ok') {
+            console.log("后端连接正常");
+        } else {
+            console.warn("后端状态异常");
         }
-    });
+    } catch (err) {
+        console.error("无法连接到后端:", err);
+        showMessage("警告：无法连接到后端服务器，支付功能可能无法使用", "error");
+    }
 }
 
-// 退出登录
-logoutBtn.addEventListener('click', function() {
-    if (!pi) return;
-    
-    // 清除用户信息
-    piUser = null;
-    
-    // 更新 UI
-    userInfo.classList.add('hidden');
-    loginSection.classList.remove('hidden');
-    paymentSection.classList.add('hidden');
-    
-    console.log('用户已退出登录');
-});
-
-// 支付表单提交事件
-paymentForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    if (!piUser) {
-        showError('请先登录');
-        return;
-    }
-    
-    const amount = parseFloat(document.getElementById('amount').value);
-    const memo = document.getElementById('memo').value;
-    
-    // 验证输入
-    if (isNaN(amount) || amount <= 0) {
-        showError('请输入有效的金额');
-        return;
-    }
-    
-    createPayment(amount, memo);
-});
-
-// 创建支付
-function createPayment(amount, memo = '') {
-    if (!pi) {
-        showError('Pi SDK 未初始化');
-        return;
-    }
-    
-    showLoading(true);
-    clearError();
-    
-    console.log('创建支付:', { amount, memo });
-    
+// 1. Pi账号授权
+async function authenticateUser() {
     try {
-        pi.createPayment({
-            amount: amount,
-            memo: memo,
-            metadata: { 
-                // 可以添加自定义元数据
-                userId: piUser.uid,
-                timestamp: Date.now()
+        const authBtn = document.getElementById('authBtn');
+        authBtn.disabled = true;
+        showMessage("正在请求Pi账号授权...");
+        
+        // 使用正确的Pi SDK授权方法
+        const authResult = await Pi.authenticate(['username', 'payments']);
+        
+        // 授权成功
+        isAuthenticated = true;
+        currentUser = authResult.user;
+        document.getElementById('authStatus').innerHTML = `<p style="margin-top: 10px; color: #2f855a;">✅ 已授权：${currentUser.username}</p>`;
+        showMessage("授权成功！", "success");
+        
+        // 解锁输入框和查询按钮
+        document.getElementById('termInput').disabled = false;
+        toggleQueryBtn();
+        
+        authBtn.textContent = "已授权";
+        authBtn.disabled = true;
+        
+    } catch (error) {
+        showMessage(`授权失败：${error.message}`, "error");
+        console.error("授权错误：", error);
+        document.getElementById('authBtn').disabled = false;
+    }
+}
+
+// 2. 处理术语查询+支付
+async function handleQuery() {
+    const term = document.getElementById('termInput').value.trim().toLowerCase();
+    
+    // 校验
+    if (!term) {
+        return showMessage("请输入要查询的术语！", "error");
+    }
+    
+    if (!termDictionary[term]) {
+        return showMessage(`未找到术语"${term}"，请检查拼写！`, "error");
+    }
+    
+    if (!isAuthenticated) {
+        return showMessage("请先授权Pi账号！", "error");
+    }
+
+    try {
+        const queryBtn = document.getElementById('queryBtn');
+        queryBtn.disabled = true;
+        showMessage("正在创建支付请求...");
+        
+        // 创建Pi支付（直接使用Pi SDK，不需要先调用后端）
+        const payment = await Pi.createPayment(
+            { 
+                amount: 0.01, 
+                memo: `查询术语：${termDictionary[term].name}`, 
+                metadata: { term: term } 
             },
-            onReadyForServerApproval: function(paymentId) {
-                console.log('支付准备就绪，等待服务器审批:', paymentId);
-                
-                // 在这个阶段，您需要将 paymentId 发送到您的后端进行审批
-                // 这里我们简化处理，直接调用 Pi API 进行审批
-                approvePayment(paymentId);
-            },
-            onReadyForServerCompletion: function(paymentId, txid) {
-                console.log('支付完成，等待服务器确认:', { paymentId, txid });
-                
-                // 在实际应用中，您应该将这些信息发送到后端进行最终确认
-                completePayment(paymentId, txid);
-            },
-            onCancel: function(paymentId) {
-                console.log('用户取消支付:', paymentId);
-                showError('支付已取消');
-                showLoading(false);
-            },
-            onError: function(err) {
-                console.error('支付创建失败:', err);
-                showError('支付创建失败: ' + err.message);
-                showLoading(false);
+            {
+                onReadyForServerApproval: (paymentId) => {
+                    console.log("支付已创建，等待服务器批准:", paymentId);
+                    serverApprovePayment(paymentId, term);
+                },
+                onReadyForServerCompletion: (paymentId, txid) => {
+                    console.log("支付已完成，等待服务器确认:", paymentId, txid);
+                    serverCompletePayment(paymentId, txid, term);
+                },
+                onCancel: () => {
+                    console.log("支付已取消");
+                    showMessage("支付已取消", "error");
+                    queryBtn.disabled = false;
+                },
+                onError: (err) => {
+                    console.error("支付错误:", err);
+                    showMessage(`支付错误：${err.message || err}`, "error");
+                    queryBtn.disabled = false;
+                }
             }
+        );
+        
+        console.log("支付对象创建成功:", payment);
+        
+    } catch (error) {
+        console.error("支付创建失败:", error);
+        showMessage(`支付创建失败：${error.message || error}`, "error");
+        document.getElementById('queryBtn').disabled = false;
+    }
+}
+
+// 3. 调用后端审批支付
+async function serverApprovePayment(paymentId, term) {
+    try {
+        showMessage("正在批准支付...");
+        
+        const res = await fetch(`${BACKEND_URL}/api/approve-payment`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                paymentId: paymentId,
+                amount: 0.01
+            })
         });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.error || "审批失败");
+        }
+        
+        console.log("支付已批准:", paymentId);
+        showMessage("支付已批准，等待完成...");
+        
     } catch (err) {
-        console.error('创建支付时发生异常:', err);
-        showError('创建支付时发生异常: ' + err.message);
-        showLoading(false);
+        console.error("审批支付失败:", err);
+        showMessage(`审批失败：${err.message}`, "error");
+        document.getElementById('queryBtn').disabled = false;
     }
 }
 
-// 审批支付（简化版本，实际应该在后端完成）
-function approvePayment(paymentId) {
-    console.log('审批支付:', paymentId);
-    
-    // 注意：在生产环境中，这一步必须在后端完成
-    // 这里我们使用前端简化处理（仅用于开发和测试）
-    
-    // 直接完成支付流程
-    completePayment(paymentId, 'test-txid-' + Date.now());
-}
-
-// 完成支付（简化版本，实际应该在后端完成）
-function completePayment(paymentId, txid) {
-    console.log('完成支付:', { paymentId, txid });
-    
-    // 注意：在生产环境中，这一步必须在后端完成
-    // 这里我们使用前端简化处理（仅用于开发和测试）
-    
-    showLoading(false);
-    alert('支付完成！\n支付ID: ' + paymentId + '\n交易ID: ' + txid);
-    console.log('支付流程完成');
-}
-
-// 显示加载状态
-function showLoading(show) {
-    if (show) {
-        loading.classList.remove('hidden');
-    } else {
-        loading.classList.add('hidden');
+// 4. 调用后端完成支付
+async function serverCompletePayment(paymentId, txid, term) {
+    try {
+        showMessage("正在完成支付...");
+        
+        const res = await fetch(`${BACKEND_URL}/api/complete-payment`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                paymentId: paymentId, 
+                txid: txid 
+            })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.error || "完成支付失败");
+        }
+        
+        console.log("支付完成:", paymentId);
+        showMessage("支付成功！", "success");
+        
+        // 显示术语释义
+        displayDefinition(term);
+        
+        // 重置UI
+        document.getElementById('queryBtn').disabled = false;
+        
+    } catch (err) {
+        console.error("完成支付失败:", err);
+        showMessage(`支付完成失败：${err.message}`, "error");
+        document.getElementById('queryBtn').disabled = false;
     }
 }
 
-// 显示错误信息
-function showError(message) {
-    error.textContent = message;
-    error.classList.remove('hidden');
+// 显示术语释义
+function displayDefinition(term) {
+    const info = termDictionary[term];
+    document.getElementById('definition').innerHTML = `
+        <h3>${info.name}</h3>
+        <p>${info.definition}</p>
+    `;
+    document.getElementById('definitionSection').style.display = "block";
 }
 
-// 清除错误信息
-function clearError() {
-    error.textContent = '';
-    error.classList.add('hidden');
+// 解锁查询按钮（输入框有内容+已授权）
+function toggleQueryBtn() {
+    const inputVal = document.getElementById('termInput').value.trim();
+    const hasValidTerm = inputVal && termDictionary[inputVal.toLowerCase()];
+    document.getElementById('queryBtn').disabled = !(isAuthenticated && hasValidTerm);
 }
 
-// 辅助函数：生成唯一ID
-function generateId() {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+// 消息提示
+function showMessage(text, type = "") {
+    const el = document.getElementById('paymentInfo');
+    el.textContent = text;
+    el.className = `payment-info ${type}`;
+    el.style.display = "block";
+    
+    // 非错误消息3秒后自动隐藏
+    if (type !== "error") {
+        setTimeout(() => {
+            if (el.textContent === text) {
+                el.style.display = "none";
+            }
+        }, 3000);
+    }
 }
