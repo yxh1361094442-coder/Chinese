@@ -6,4 +6,11 @@
     "start": "node server.js",
     "dev": "node server.js"
   },
-  "d
+  "dependencies": {
+    "express": "^4.18.0",
+    "cors": "^2.8.5"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
