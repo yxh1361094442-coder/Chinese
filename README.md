@@ -1,125 +1,174 @@
-# Pi Network 支付应用
+# Chinese - Pi术语查询应用
 
-这是一个基于 Pi Network JavaScript SDK 开发的支付应用，允许用户使用 Pi Network 账户登录并进行支付操作。
+一个基于Pi Network的Web应用，用户支付0.01 Pi币后可以查询Pi生态英文术语的中文释义。
 
-## 功能特性
-
-- 用户认证：使用 Pi Network 账户登录
-- 支付创建：创建 Pi 支付订单
-- 支付流程管理：处理支付的审批和完成
-- 响应式设计：适配移动设备和桌面设备
-
-## 环境要求
-
-- 现代 Web 浏览器（支持 JavaScript）
-- Pi Network 应用访问权限
-
-## 快速开始
-
-### 1. 配置应用
-
-在 `script.js` 文件中更新您的 Pi Network 应用配置：
-
-```javascript
-const PI_CONFIG = {
-    appId: 'your-pi-app-id-here', // 替换为您的应用 ID
-    version: '1.0',
-    sandbox: true // 在开发阶段使用沙盒模式
-};
-```
-
-### 2. 启动应用
-
-您可以使用任何静态文件服务器来运行此应用。以下是几种常用方法：
-
-#### 方法一：使用 Python
-
-```bash
-# Python 3
-python -m http.server 8000
-
-# Python 2
-python -m SimpleHTTPServer 8000
-```
-
-然后在浏览器中访问 `http://localhost:8000`
-
-#### 方法二：使用 Node.js (serve)
-
-```bash
-# 首先安装 serve
-npm install -g serve
-
-# 然后启动服务器
-serve .
-```
-
-#### 方法三：使用 PHP
-
-```bash
-php -S localhost:8000
-```
-
-### 3. 使用应用
-
-1. 点击 "使用 Pi Network 登录" 按钮
-2. 在 Pi Network 应用中授权登录
-3. 登录成功后，填写支付金额和备注
-4. 点击 "支付" 按钮创建支付
-5. 按照 Pi Network 应用的提示完成支付
-
-## 部署到 Vercel
-
-您可以使用 Vercel 快速部署此应用：
-
-1. 将项目推送到 GitHub 仓库
-2. 登录 Vercel 并连接您的 GitHub 账户
-3. 选择您的仓库并点击 "Import"
-4. 按照提示完成部署
-
-## 文件结构
+## 项目结构
 
 ```
 pi-develop/
-├── index.html      # 主页面文件
-├── style.css       # 样式文件
-├── script.js       # 核心 JavaScript 文件
+├── index.html      # 主页面文件（包含Pi SDK引入）
+├── style.css       # 样式文件（响应式设计）
+├── script.js       # JavaScript功能文件（核心逻辑）
 └── README.md       # 项目说明文档
 ```
 
-## 注意事项
+## 功能特性
 
-1. **应用 ID**：确保在 `script.js` 中使用您自己的 Pi Network 应用 ID
-2. **沙盒模式**：在开发阶段使用 `sandbox: true`，生产环境设置为 `false`
-3. **权限范围**：确保您的应用在 Pi Network 开发者门户中请求了必要的权限（`username` 和 `payments`）
-4. **后端集成**：在生产环境中，支付的审批和完成应该在后端服务器上进行，而不是在前端直接处理
+- ✅ 纯前端实现，无需后端和数据库
+- ✅ 集成Pi Network Frontend JavaScript SDK
+- ✅ 用户Pi账号授权（仅获取用户名）
+- ✅ 0.01 Pi币支付查询
+- ✅ 内置10个高频Pi术语查询
+- ✅ 响应式设计，适配手机和电脑端
+- ✅ 完整的错误处理和用户反馈
 
-## 故障排除
+## 支持查询的术语
 
-### 404 错误
-- 检查文件路径是否正确
-- 确保所有文件都已正确上传到服务器
-- 检查服务器配置，确保静态文件可以正确访问
+- Node (节点)
+- Testnet (测试网)
+- Mainnet (主网)
+- Staking (质押)
+- Mining (挖矿)
+- Balance (余额)
+- Security Circle (安全圈)
+- Developer Portal (开发者门户)
+- SDK (软件开发工具包)
+- Checklist (检查清单)
 
-### 认证失败
-- 确保使用了正确的应用 ID
-- 检查网络连接
-- 确保 Pi Network 应用已安装并登录
+## 部署指南
 
-### 支付失败
-- 确保应用已请求 `payments` 权限
-- 检查金额是否大于 0
-- 检查网络连接
+### 方法1：GitHub Pages部署（推荐）
+
+1. **创建GitHub仓库**
+   - 登录GitHub，创建一个新的公共仓库
+   - 仓库名称建议使用：`pi-chinese-term-query` 或其他您喜欢的名称
+
+2. **上传文件**
+   - 将 `index.html`、`style.css`、`script.js` 三个文件上传到仓库根目录
+
+3. **启用GitHub Pages**
+   - 进入仓库设置 → Pages
+   - 选择 "main" 分支，根目录
+   - 点击 "Save" 保存设置
+   - 等待几分钟，GitHub会生成访问URL（通常是 `https://your-username.github.io/repository-name/`）
+
+### 方法2：其他静态网站托管
+
+您也可以使用以下平台部署：
+- Vercel
+- Netlify
+- Cloudflare Pages
+- 自己的Web服务器
+
+## Pi Browser验证说明
+
+1. **在Pi Network应用中打开**
+   - 打开Pi Network移动应用
+   - 进入主界面，点击左上角菜单
+   - 选择 "Pi Browser"
+
+2. **访问部署后的URL**
+   - 在Pi Browser的地址栏中输入您的应用URL
+   - 点击 "Go" 访问
+
+3. **功能验证**
+   - 点击 "点击授权Pi账号" 按钮
+   - 在弹出的授权窗口中确认授权
+   - 输入一个支持的术语（如 "Node"）
+   - 点击 "查询术语" 按钮
+   - 在Pi钱包中确认支付0.01 Pi币
+   - 支付成功后，查看中文释义
+
+## 使用说明
+
+1. **授权账号**
+   - 首次使用需要授权Pi账号
+   - 仅获取用户名信息，保护隐私安全
+
+2. **输入术语**
+   - 在输入框中输入Pi英文术语
+   - 支持的术语请参考上方列表
+   - 不区分大小写
+
+3. **发起查询**
+   - 点击"查询术语"按钮
+   - 系统会创建0.01 Pi币的支付请求
+
+4. **完成支付**
+   - 在Pi钱包中确认支付
+   - 支付成功后自动显示中文释义
 
 ## 开发说明
 
-此应用使用了以下技术：
+### 核心代码位置
 
-- HTML5
-- CSS3
-- JavaScript (ES6+)
-- Pi Network JavaScript SDK
+1. **术语库**：在 `script.js` 文件的 `termDictionary` 对象中
+   ```javascript
+   const termDictionary = {
+       "node": {
+           name: "Node",
+           definition: "节点：Pi网络中的计算机或服务器..."
+       },
+       // 其他术语...
+   };
+   ```
+
+2. **支付接口调用**：在 `script.js` 文件的 `createPayment` 函数中
+   ```javascript
+   const payment = await Pi.createPayment({
+       amount: 0.01, // 支付金额
+       memo: `查询术语: ${termDictionary[term].name}`, // 备注
+       metadata: { term: term } // 元数据
+   });
+   ```
+
+### 生产环境配置
+
+当前应用使用测试环境（sandbox: true），如果需要切换到生产环境：
+
+1. 在 `script.js` 文件中找到：
+   ```javascript
+   Pi.init({
+       version: "2.0",
+       sandbox: true // 测试环境
+   });
+   ```
+
+2. 修改为：
+   ```javascript
+   Pi.init({
+       version: "2.0",
+       sandbox: false // 生产环境
+   });
+   ```
+
+3. 在 [Pi Network开发者门户](https://develop.pi.network/) 注册您的应用并获取应用ID
+
+## 注意事项
+
+1. **浏览器兼容性**
+   - 最佳体验：Pi Network浏览器
+   - 普通浏览器：可以查看界面，但无法使用Pi相关功能
+
+2. **支付说明**
+   - 当前为测试环境，支付不会扣除真实Pi币
+   - 生产环境会真实扣除0.01 Pi币
+
+3. **术语更新**
+   - 可以在 `script.js` 文件的 `termDictionary` 中添加或修改术语
+
+## 技术支持
+
+如果遇到问题：
+1. 确保使用Pi Network浏览器访问
+2. 检查网络连接
+3. 确认已完成Pi账号授权
+4. 检查输入的术语拼写是否正确
 
 ## 许可证
 
-MIT
+本项目采用 MIT 许可证
+
+---
+
+祝您使用愉快！🎉
