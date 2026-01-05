@@ -1,54 +1,52 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pi Network 支付应用</title>
-    <link rel="stylesheet" href="style.css">
-    <!-- Pi Network JavaScript SDK -->
-    <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pi术语查询 - 中文释义工具</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>Pi Network 支付应用</h1>
-        
-        <!-- 用户信息区域 -->
-        <div id="userInfo" class="hidden">
-            <p>已登录用户: <span id="username"></span></p>
-            <button id="logoutBtn">退出登录</button>
-        </div>
-        
-        <!-- 登录按钮 -->
-        <div id="loginSection">
-            <button id="loginBtn" onclick="authenticate()">使用 Pi Network 登录</button>
-        </div>
-        
-        <!-- 支付表单 -->
-        <div id="paymentSection" class="hidden">
-            <h2>创建支付</h2>
-            <form id="paymentForm">
-                <div class="form-group">
-                    <label for="amount">金额 (Pi):</label>
-                    <input type="number" id="amount" name="amount" step="0.01" min="0.01" required>
-                </div>
-                <div class="form-group">
-                    <label for="memo">备注:</label>
-                    <input type="text" id="memo" name="memo" maxlength="200">
-                </div>
-                <button type="submit" id="payBtn">支付</button>
-            </form>
-        </div>
-        
-        <!-- 加载指示器 -->
-        <div id="loading" class="hidden">
-            <div class="spinner"></div>
-            <p>加载中...</p>
-        </div>
-        
-        <!-- 错误信息 -->
-        <div id="error" class="hidden"></div>
+  <div class="container">
+    <header>
+      <h1>🔍 Pi术语查询</h1>
+      <p>支付0.01 Pi币查询Pi生态英文术语的中文释义</p>
+    </header>
+
+    <!-- 授权状态区域 -->
+    <div class="auth-status">
+      <button id="authBtn">点击授权Pi账号</button>
+      <div id="authStatus"></div>
     </div>
-    
-    <script src="script.js"></script>
+
+    <!-- 查询区域 -->
+    <div class="query-section">
+      <label for="termInput">输入要查询的术语：</label>
+      <input 
+        type="text" 
+        id="termInput" 
+        placeholder="例如：node, mining, staking..."
+        disabled
+      >
+      <button id="queryBtn" disabled>查询术语（支付0.01 Pi）</button>
+    </div>
+
+    <!-- 支付信息提示 -->
+    <div id="paymentInfo" class="payment-info"></div>
+
+    <!-- 释义展示区域 -->
+    <div id="definitionSection" class="definition-section">
+      <h2>📖 术语释义</h2>
+      <div id="definition"></div>
+    </div>
+
+    <footer>
+      <p>使用 Pi Network 浏览器访问以获得最佳体验</p>
+    </footer>
+  </div>
+
+  <!-- 引入Pi SDK（沙盒环境） -->
+  <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
