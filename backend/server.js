@@ -29,13 +29,15 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// 生成支付签名
+// 生成支付签名（修复：改进签名生成逻辑）
 function generatePaymentSignature(paymentId, amount) {
   if (!PI_APP_PRIV_KEY) {
     throw new Error("PI_APP_PRIV_KEY 环境变量未设置");
   }
 
   const signStr = `${paymentId}_${amount}`;
+  console.log(`[签名] 签名字符串: ${signStr}`);
+  
   const sign = crypto.createSign('sha256');
   sign.update(signStr);
   sign.end();
@@ -45,30 +47,41 @@ function generatePaymentSignature(paymentId, amount) {
   // 处理私钥格式
   if (!privateKey.includes('-----BEGIN')) {
     // 如果私钥不包含PEM头，尝试添加
-    privateKey = `-----BEGIN EC PRIVATE KEY-----\n${privateKey.replace(/\s/g, '')}\n-----END EC PRIVATE KEY-----`;
+    // Pi Network通常提供的是base64编码的原始私钥
+    const keyWithoutSpaces = privateKey.replace(/\s/g, '');
+    privateKey = `-----BEGIN EC PRIVATE KEY-----\n${keyWithoutSpaces}\n-----END EC PRIVATE KEY-----`;
   }
 
   try {
-    return sign.sign(privateKey, 'base64');
+    const signature = sign.sign(privateKey, 'base64');
+    console.log(`[签名] 签名生成成功 (PEM格式)`);
+    return signature;
   } catch (signErr) {
     // 如果PEM格式失败，尝试原始格式
-    console.warn("PEM格式签名失败，尝试原始格式");
+    console.warn(`[签名] PEM格式失败: ${signErr.message}，尝试原始格式`);
     try {
       const sign2 = crypto.createSign('sha256');
       sign2.update(signStr);
       sign2.end();
-      const rawKey = Buffer.from(PI_APP_PRIV_KEY.replace(/\s/g, ''), 'base64');
-      return sign2.sign(rawKey, 'base64');
+      // 尝试直接使用base64解码的私钥
+      const keyWithoutSpaces = PI_APP_PRIV_KEY.replace(/\s/g, '');
+      const rawKey = Buffer.from(keyWithoutSpaces, 'base64');
+      const signature = sign2.sign(rawKey, 'base64');
+      console.log(`[签名] 签名生成成功 (原始格式)`);
+      return signature;
     } catch (signErr2) {
+      console.error(`[签名] 原始格式也失败: ${signErr2.message}`);
       throw new Error(`签名生成失败: ${signErr2.message}`);
     }
   }
 }
 
-// 1. 批准支付（前端调用）
+// 1. 批准支付（前端调用）- 修复：添加更详细的日志和错误处理
 app.post('/api/approve-payment', async (req, res) => {
   try {
     const { paymentId, amount } = req.body;
+    
+    console.log(`[后端] 收到批准请求:`, { paymentId, amount });
     
     if (!paymentId) {
       return res.status(400).json({ 
@@ -77,7 +90,22 @@ app.post('/api/approve-payment', async (req, res) => {
       });
     }
 
-    console.log(`[批准支付] 开始处理: ${paymentId}`);
+    // 检查环境变量
+    if (!PI_API_KEY) {
+      console.error("[后端] PI_API_KEY 未设置");
+      return res.status(500).json({
+        success: false,
+        error: "服务器配置错误：PI_API_KEY 未设置"
+      });
+    }
+
+    if (!PI_APP_PRIV_KEY) {
+      console.error("[后端] PI_APP_PRIV_KEY 未设置");
+      return res.status(500).json({
+        success: false,
+        error: "服务器配置错误：PI_APP_PRIV_KEY 未设置"
+      });
+    }
 
     // 获取支付金额
     let paymentAmount = amount;
@@ -88,6 +116,7 @@ app.post('/api/approve-payment', async (req, res) => {
     // 如果还是没有，从 Pi API 获取
     if (!paymentAmount) {
       try {
+        console.log(`[后端] 从Pi API获取支付信息: ${paymentId}`);
         const statusRes = await fetch(`${PI_API_BASE}/payments/${paymentId}`, {
           headers: { 
             "Authorization": `Key ${PI_API_KEY}`,
@@ -97,23 +126,37 @@ app.post('/api/approve-payment', async (req, res) => {
         if (statusRes.ok) {
           const statusData = await statusRes.json();
           paymentAmount = statusData.amount;
+          console.log(`[后端] 从Pi API获取到金额: ${paymentAmount}`);
+        } else {
+          const errorData = await statusRes.json();
+          console.error(`[后端] 获取支付信息失败:`, errorData);
         }
       } catch (err) {
-        console.error("获取支付信息失败:", err);
+        console.error("[后端] 获取支付信息异常:", err);
       }
     }
     
     if (!paymentAmount) {
       return res.status(400).json({ 
         success: false, 
-        error: "无法获取支付金额" 
+        error: "无法获取支付金额，请确保paymentId正确" 
       });
     }
 
     // 生成签名
-    const signature = generatePaymentSignature(paymentId, paymentAmount);
+    let signature;
+    try {
+      signature = generatePaymentSignature(paymentId, paymentAmount);
+    } catch (signErr) {
+      console.error(`[后端] 签名生成失败:`, signErr);
+      return res.status(500).json({
+        success: false,
+        error: `签名生成失败: ${signErr.message}`
+      });
+    }
 
     // 调用Pi API批准支付
+    console.log(`[后端] 调用Pi API批准支付: ${paymentId}`);
     const approveRes = await fetch(`${PI_API_BASE}/payments/${paymentId}/approve`, {
       method: "POST",
       headers: {
@@ -134,18 +177,27 @@ app.post('/api/approve-payment', async (req, res) => {
     const approveData = await approveRes.json();
     
     if (!approveRes.ok) {
-      console.error(`批准失败: ${JSON.stringify(approveData)}`);
-      throw new Error(`支付批准失败: ${approveData.error || approveRes.status}`);
+      console.error(`[后端] Pi API批准失败:`, {
+        status: approveRes.status,
+        statusText: approveRes.statusText,
+        data: approveData
+      });
+      return res.status(approveRes.status).json({
+        success: false,
+        error: `支付批准失败: ${approveData.error || approveData.message || approveRes.statusText || '未知错误'}`,
+        details: approveData
+      });
     }
 
-    console.log(`[批准成功] ${paymentId}`);
+    console.log(`[后端] 批准成功: ${paymentId}`);
     
     // 更新缓存状态
-    if (paymentsCache[paymentId]) {
-      paymentsCache[paymentId].status = 'approved';
-      paymentsCache[paymentId].approvedAt = new Date().toISOString();
-      paymentsCache[paymentId].amount = paymentAmount;
-    }
+    paymentsCache[paymentId] = {
+      identifier: paymentId,
+      amount: paymentAmount,
+      status: 'approved',
+      approvedAt: new Date().toISOString()
+    };
 
     res.json({ 
       success: true, 
@@ -154,10 +206,10 @@ app.post('/api/approve-payment', async (req, res) => {
     });
     
   } catch (err) {
-    console.error("[批准支付失败]", err);
+    console.error("[后端] 批准支付异常:", err);
     res.status(500).json({ 
       success: false, 
-      error: err.message 
+      error: err.message || "服务器内部错误"
     });
   }
 });
@@ -174,7 +226,7 @@ app.post('/api/complete-payment', async (req, res) => {
       });
     }
 
-    console.log(`[完成支付] 支付ID: ${paymentId}, 交易ID: ${txid}`);
+    console.log(`[后端] 完成支付: ${paymentId}, txid: ${txid}`);
 
     // 调用Pi API完成支付
     const completeRes = await fetch(`${PI_API_BASE}/payments/${paymentId}/complete`, {
@@ -196,11 +248,11 @@ app.post('/api/complete-payment', async (req, res) => {
     const completeData = await completeRes.json();
     
     if (!completeRes.ok) {
-      console.error(`完成失败: ${JSON.stringify(completeData)}`);
+      console.error(`[后端] 完成失败:`, completeData);
       throw new Error(`支付完成失败: ${completeData.error || completeRes.status}`);
     }
 
-    console.log(`[完成成功] ${paymentId}`);
+    console.log(`[后端] 完成成功: ${paymentId}`);
     
     // 更新缓存状态
     if (paymentsCache[paymentId]) {
@@ -217,7 +269,7 @@ app.post('/api/complete-payment', async (req, res) => {
     });
     
   } catch (err) {
-    console.error("[完成支付失败]", err);
+    console.error("[后端] 完成支付异常:", err);
     res.status(500).json({ 
       success: false, 
       error: err.message 
@@ -232,7 +284,7 @@ app.post('/api/pi-webhook', async (req, res) => {
     const payment = data;
     const paymentId = payment.payment_identifier || payment.identifier;
     
-    console.log(`[Webhook收到] 事件: ${event}, 支付ID: ${paymentId}`);
+    console.log(`[Webhook] 收到事件: ${event}, 支付ID: ${paymentId}`);
 
     // 立即响应Pi，避免超时
     res.status(200).json({ 
@@ -251,7 +303,7 @@ app.post('/api/pi-webhook', async (req, res) => {
           paymentsCache[paymentId].updatedAt = new Date().toISOString();
           
           if (event === "payment.completed") {
-            console.log(`🎉 [支付完成] ${paymentId}`);
+            console.log(`🎉 [Webhook] 支付完成: ${paymentId}`);
             const cached = paymentsCache[paymentId];
             if (cached.metadata && cached.metadata.term) {
               console.log(`用户查询术语: ${cached.metadata.term}`);
@@ -259,12 +311,12 @@ app.post('/api/pi-webhook', async (req, res) => {
           }
         }
       } catch (asyncErr) {
-        console.error("[Webhook异步处理失败]", asyncErr);
+        console.error("[Webhook] 异步处理失败:", asyncErr);
       }
     }, 100);
     
   } catch (err) {
-    console.error("[Webhook处理失败]", err);
+    console.error("[Webhook] 处理失败:", err);
     res.status(200).json({ 
       received: true, 
       error: err.message 
