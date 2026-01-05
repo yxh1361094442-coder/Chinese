@@ -73,7 +73,10 @@ async function checkBackendConnection() {
         const res = await fetch(`${BACKEND_URL}/api/health`);
         const data = await res.json();
         if (data.status === 'ok') {
-            console.log("后端连接正常");
+            console.log("后端连接正常", data);
+            if (!data.hasConfig) {
+                showMessage("警告：后端环境变量未配置完整，支付功能可能无法使用", "error");
+            }
         } else {
             console.warn("后端状态异常");
         }
@@ -143,13 +146,27 @@ async function handleQuery() {
                 metadata: { term: term } 
             },
             {
-                onReadyForServerApproval: (paymentId) => {
+                // 🔥 关键修复：必须返回 Promise，确保异步操作完成
+                onReadyForServerApproval: async (paymentId) => {
                     console.log("支付已创建，等待服务器批准:", paymentId);
-                    serverApprovePayment(paymentId, term);
+                    try {
+                        await serverApprovePayment(paymentId, term);
+                    } catch (err) {
+                        console.error("批准支付失败:", err);
+                        showMessage(`批准失败：${err.message}`, "error");
+                        queryBtn.disabled = false;
+                        throw err; // 重新抛出错误，让Pi SDK知道批准失败
+                    }
                 },
-                onReadyForServerCompletion: (paymentId, txid) => {
+                onReadyForServerCompletion: async (paymentId, txid) => {
                     console.log("支付已完成，等待服务器确认:", paymentId, txid);
-                    serverCompletePayment(paymentId, txid, term);
+                    try {
+                        await serverCompletePayment(paymentId, txid, term);
+                    } catch (err) {
+                        console.error("完成支付失败:", err);
+                        showMessage(`完成失败：${err.message}`, "error");
+                        queryBtn.disabled = false;
+                    }
                 },
                 onCancel: () => {
                     console.log("支付已取消");
@@ -173,10 +190,11 @@ async function handleQuery() {
     }
 }
 
-// 3. 调用后端审批支付
+// 3. 调用后端审批支付（修复：确保正确处理错误和超时）
 async function serverApprovePayment(paymentId, term) {
     try {
         showMessage("正在批准支付...");
+        console.log(`[前端] 开始批准支付: ${paymentId}`);
         
         const res = await fetch(`${BACKEND_URL}/api/approve-payment`, {
             method: "POST",
@@ -190,16 +208,19 @@ async function serverApprovePayment(paymentId, term) {
         const data = await res.json();
         
         if (!res.ok) {
-            throw new Error(data.error || "审批失败");
+            const errorMsg = data.error || `HTTP ${res.status}: 审批失败`;
+            console.error(`[前端] 批准失败:`, errorMsg, data);
+            throw new Error(errorMsg);
         }
         
-        console.log("支付已批准:", paymentId);
+        console.log("[前端] 支付已批准:", paymentId, data);
         showMessage("支付已批准，等待完成...");
         
+        return data; // 返回结果，确保Promise正确解析
+        
     } catch (err) {
-        console.error("审批支付失败:", err);
-        showMessage(`审批失败：${err.message}`, "error");
-        document.getElementById('queryBtn').disabled = false;
+        console.error("[前端] 审批支付异常:", err);
+        throw err; // 重新抛出，让调用者处理
     }
 }
 
@@ -207,6 +228,7 @@ async function serverApprovePayment(paymentId, term) {
 async function serverCompletePayment(paymentId, txid, term) {
     try {
         showMessage("正在完成支付...");
+        console.log(`[前端] 开始完成支付: ${paymentId}, txid: ${txid}`);
         
         const res = await fetch(`${BACKEND_URL}/api/complete-payment`, {
             method: "POST",
@@ -220,10 +242,12 @@ async function serverCompletePayment(paymentId, txid, term) {
         const data = await res.json();
         
         if (!res.ok) {
-            throw new Error(data.error || "完成支付失败");
+            const errorMsg = data.error || `HTTP ${res.status}: 完成支付失败`;
+            console.error(`[前端] 完成失败:`, errorMsg, data);
+            throw new Error(errorMsg);
         }
         
-        console.log("支付完成:", paymentId);
+        console.log("[前端] 支付完成:", paymentId, data);
         showMessage("支付成功！", "success");
         
         // 显示术语释义
@@ -232,10 +256,11 @@ async function serverCompletePayment(paymentId, txid, term) {
         // 重置UI
         document.getElementById('queryBtn').disabled = false;
         
+        return data;
+        
     } catch (err) {
-        console.error("完成支付失败:", err);
-        showMessage(`支付完成失败：${err.message}`, "error");
-        document.getElementById('queryBtn').disabled = false;
+        console.error("[前端] 完成支付异常:", err);
+        throw err;
     }
 }
 
