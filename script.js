@@ -43,6 +43,7 @@ const termDictionary = {
 
 let currentUser = null;
 let isPiBrowser = false;
+const API_BASE_URL = window.location.origin;
 
 async function initPiSDK() {
     try {
@@ -108,6 +109,58 @@ async function authenticate() {
     }
 }
 
+async function approvePayment(paymentId) {
+    try {
+        console.log('调用后端批准支付:', paymentId);
+        
+        const response = await fetch(`${API_BASE_URL}/api/approve`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ paymentId })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || '支付批准失败');
+        }
+
+        console.log('支付批准成功:', data);
+        return data;
+    } catch (error) {
+        console.error('批准支付错误:', error);
+        throw error;
+    }
+}
+
+async function completePaymentBackend(paymentId, txid) {
+    try {
+        console.log('调用后端完成支付:', paymentId, txid);
+        
+        const response = await fetch(`${API_BASE_URL}/api/complete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ paymentId, txid })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || '支付完成失败');
+        }
+
+        console.log('支付完成成功:', data);
+        return data;
+    } catch (error) {
+        console.error('完成支付错误:', error);
+        throw error;
+    }
+}
+
 async function createPayment(term) {
     try {
         console.log('=== 开始创建支付 ===');
@@ -136,12 +189,25 @@ async function createPayment(term) {
         }
 
         const payment = await Pi.createPayment(paymentData, {
-            onReadyForServerApproval: (paymentId) => {
+            onReadyForServerApproval: async (paymentId) => {
                 console.log('Payment ready for server approval:', paymentId);
+                try {
+                    await approvePayment(paymentId);
+                } catch (error) {
+                    console.error('Server approval failed:', error);
+                    showError('支付批准失败：' + error.message);
+                }
             },
-            onReadyForServerCompletion: (paymentId, txid) => {
+            onReadyForServerCompletion: async (paymentId, txid) => {
                 console.log('Payment ready for server completion:', paymentId, txid);
-                completePayment(paymentId, txid, term);
+                try {
+                    await completePaymentBackend(paymentId, txid);
+                    displayResult(term);
+                } catch (error) {
+                    console.error('Server completion failed:', error);
+                    showError('支付完成失败：' + error.message);
+                }
+                showLoading(false);
             },
             onCancelled: (paymentId) => {
                 console.log('Payment cancelled:', paymentId);
@@ -161,24 +227,6 @@ async function createPayment(term) {
         console.error('Payment creation error:', error);
         console.error('Error stack:', error.stack);
         showError('支付创建失败：' + (error.message || '未知错误'));
-        showLoading(false);
-    }
-}
-
-async function completePayment(paymentId, txid, term) {
-    try {
-        console.log('=== 完成支付 ===');
-        console.log('Payment ID:', paymentId, 'TXID:', txid);
-        
-        await Pi.submitPaymentTransaction(paymentId, txid);
-        
-        console.log('Payment completed successfully');
-        displayResult(term);
-        showLoading(false);
-        
-    } catch (error) {
-        console.error('Payment completion error:', error);
-        showError('支付完成失败：' + (error.message || '未知错误'));
         showLoading(false);
     }
 }
