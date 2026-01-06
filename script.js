@@ -70,19 +70,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('queryBtn').addEventListener('click', handleQuery);
     document.getElementById('termInput').addEventListener('input', toggleQueryBtn);
     
-    // 术语输入自动补全提示
-    const termInput = document.getElementById('termInput');
-    termInput.addEventListener('input', function() {
-        const val = this.value.toLowerCase().trim();
-        if (val) {
-            const matches = Object.keys(termDictionary).filter(term => term.startsWith(val));
-            // 简单提示：显示匹配的术语
-            if (matches.length > 0) {
-                showMessage(`提示：支持的术语有：${matches.join(', ')}`, '');
-            }
-        }
-    });
-    
     // 检查后端连接和配置
     checkBackendConnection();
 });
@@ -120,6 +107,41 @@ async function checkBackendConnection() {
     }
 }
 
+// 处理未完成的支付（关键修复：解决"无法支付"的常见原因）
+function onIncompletePaymentFound(payment) {
+    console.log("Found incomplete payment:", payment);
+    
+    // 如果支付已有txid，说明用户已付款但未确认，尝试完成
+    if (payment.transaction && payment.transaction.txid) {
+        console.log("Attempting to complete stuck payment with txid...");
+        showMessage("发现未完成的支付，正在尝试完成...", "warning");
+        serverCompletePayment(payment.identifier, payment.transaction.txid, "restored_payment")
+            .then(() => showMessage("✅ 之前的支付已成功修复！", "success"))
+            .catch((e) => showMessage(`修复支付失败: ${e.message}`, "error"));
+    } else {
+        // 否则（例如用户在批准阶段退出），取消它以允许新支付
+        console.log("Cancelling stuck payment...");
+        showMessage("发现未完成的挂起支付，正在清理...", "warning");
+        
+        // 调用后端取消支付
+        fetch(`${BACKEND_URL}/api/cancel-payment`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paymentId: payment.identifier })
+        })
+        .then(res => res.json())
+        .then(data => {
+            console.log("Cancelled stuck payment result:", data);
+            showMessage("✅ 已清理未完成的支付，现在可以重新支付", "success");
+        })
+        .catch(err => {
+            console.error("Failed to cancel payment:", err);
+            // 尝试使用前端API取消（如果SDK支持，但通常后端取消更稳）
+            showMessage("⚠️ 清理支付失败，请刷新页面重试", "error");
+        });
+    }
+}
+
 // 1. Pi账号授权
 async function authenticateUser() {
     try {
@@ -127,8 +149,8 @@ async function authenticateUser() {
         authBtn.disabled = true;
         showMessage("正在请求Pi账号授权...");
         
-        // 使用正确的Pi SDK授权方法
-        const authResult = await Pi.authenticate(['username', 'payments']);
+        // 使用正确的Pi SDK授权方法，并处理未完成的支付
+        const authResult = await Pi.authenticate(['username', 'payments'], onIncompletePaymentFound);
         
         // 授权成功
         isAuthenticated = true;
@@ -367,24 +389,19 @@ function toggleQueryBtn() {
     document.getElementById('queryBtn').disabled = !(isAuthenticated && hasValidTerm);
 }
 
-// 消息提示（含加载动画）
+// 消息提示
 function showMessage(text, type = "") {
     const el = document.getElementById('paymentInfo');
-    // 加载状态添加动画
-    if (text.includes("创建") || text.includes("批准") || text.includes("完成") || text.includes("检查") || text.includes("请求")) {
-        el.innerHTML = `<span class="loading"></span>${text}`;
-    } else {
-        el.textContent = text;
-    }
+    el.textContent = text;
     el.className = `payment-info ${type}`;
     el.style.display = "block";
     
-    // 延长非错误消息显示时间（5秒）
+    // 非错误消息3秒后自动隐藏
     if (type !== "error") {
         setTimeout(() => {
-            if (!el.innerHTML.includes("loading") && !el.textContent.includes("批准中") && !el.textContent.includes("完成中") && !el.textContent.includes("创建中")) {
+            if (el.textContent === text) {
                 el.style.display = "none";
             }
-        }, 5000);
+        }, 3000);
     }
 }
