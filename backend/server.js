@@ -86,7 +86,7 @@ function generatePaymentSignature(paymentId, amount) {
   }
 }
 
-// 1. 批准支付（前端调用）- 修复：添加更详细的日志和错误处理
+// 1. 批准支付（前端调用）
 app.post('/api/approve-payment', async (req, res) => {
   const startTime = Date.now();
   
