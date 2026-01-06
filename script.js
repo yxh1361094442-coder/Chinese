@@ -70,6 +70,19 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('queryBtn').addEventListener('click', handleQuery);
     document.getElementById('termInput').addEventListener('input', toggleQueryBtn);
     
+    // 术语输入自动补全提示
+    const termInput = document.getElementById('termInput');
+    termInput.addEventListener('input', function() {
+        const val = this.value.toLowerCase().trim();
+        if (val) {
+            const matches = Object.keys(termDictionary).filter(term => term.startsWith(val));
+            // 简单提示：显示匹配的术语
+            if (matches.length > 0) {
+                showMessage(`提示：支持的术语有：${matches.join(', ')}`, '');
+            }
+        }
+    });
+    
     // 检查后端连接和配置
     checkBackendConnection();
 });
@@ -154,7 +167,7 @@ async function handleQuery() {
         return showMessage("请先授权Pi账号！", "error");
     }
 
-    // 支付前检查后端配置
+    // 🔥 关键：支付前检查后端配置
     if (!backendConfigOk) {
         const confirmRetry = confirm("后端配置可能有问题，是否继续尝试支付？\n\n如果失败，请检查Vercel环境变量配置。");
         if (!confirmRetry) {
@@ -174,7 +187,7 @@ async function handleQuery() {
         
         console.log(`[支付] 开始创建支付，术语: ${term}`);
         
-        // 创建Pi支付
+        // 创建Pi支付（直接使用Pi SDK，不需要先调用后端）
         const payment = await Pi.createPayment(
             { 
                 amount: 0.01, 
@@ -182,6 +195,7 @@ async function handleQuery() {
                 metadata: { term: term } 
             },
             {
+                // 🔥 关键修复：必须返回 Promise，确保异步操作完成
                 onReadyForServerApproval: async (paymentId) => {
                     console.log(`[支付] 支付已创建，等待服务器批准: ${paymentId}`);
                     showMessage(`支付已创建（ID: ${paymentId.substring(0, 8)}...），正在批准...`);
@@ -194,7 +208,7 @@ async function handleQuery() {
                         const errorMsg = err.message || "未知错误";
                         showMessage(`❌ 批准失败：${errorMsg}`, "error");
                         queryBtn.disabled = false;
-                        throw err;
+                        throw err; // 重新抛出错误，让Pi SDK知道批准失败
                     }
                 },
                 onReadyForServerCompletion: async (paymentId, txid) => {
@@ -234,13 +248,13 @@ async function handleQuery() {
     }
 }
 
-// 3. 调用后端审批支付
+// 3. 调用后端审批支付（修复：确保正确处理错误和超时）
 async function serverApprovePayment(paymentId, term) {
     try {
         showMessage("正在批准支付...");
         console.log(`[前端] 开始批准支付: ${paymentId}`);
         
-        // 超时控制（30秒）
+        // 添加超时控制（30秒）
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
         
@@ -271,14 +285,14 @@ async function serverApprovePayment(paymentId, term) {
         console.log("[前端] 支付已批准:", paymentId, data);
         showMessage("✅ 支付已批准，等待完成...");
         
-        return data;
+        return data; // 返回结果，确保Promise正确解析
         
     } catch (err) {
         console.error("[前端] 审批支付异常:", err);
         if (err.name === 'AbortError') {
             throw new Error("批准请求超时（30秒），请检查网络连接或后端服务");
         }
-        throw err;
+        throw err; // 重新抛出，让调用者处理
     }
 }
 
@@ -288,6 +302,7 @@ async function serverCompletePayment(paymentId, txid, term) {
         showMessage("正在完成支付...");
         console.log(`[前端] 开始完成支付: ${paymentId}, txid: ${txid}`);
         
+        // 添加超时控制（30秒）
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
         
@@ -352,19 +367,24 @@ function toggleQueryBtn() {
     document.getElementById('queryBtn').disabled = !(isAuthenticated && hasValidTerm);
 }
 
-// 消息提示
+// 消息提示（含加载动画）
 function showMessage(text, type = "") {
     const el = document.getElementById('paymentInfo');
-    el.textContent = text;
+    // 加载状态添加动画
+    if (text.includes("创建") || text.includes("批准") || text.includes("完成") || text.includes("检查") || text.includes("请求")) {
+        el.innerHTML = `<span class="loading"></span>${text}`;
+    } else {
+        el.textContent = text;
+    }
     el.className = `payment-info ${type}`;
     el.style.display = "block";
     
-    // 非错误消息3秒后自动隐藏
+    // 延长非错误消息显示时间（5秒）
     if (type !== "error") {
         setTimeout(() => {
-            if (el.textContent === text) {
+            if (!el.innerHTML.includes("loading") && !el.textContent.includes("批准中") && !el.textContent.includes("完成中") && !el.textContent.includes("创建中")) {
                 el.style.display = "none";
             }
-        }, 3000);
+        }, 5000);
     }
 }
