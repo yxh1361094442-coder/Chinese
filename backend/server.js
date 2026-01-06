@@ -17,12 +17,22 @@ const PI_API_BASE = "https://api.sandbox.minepi.com/v2";
 const APP_SLUG = process.env.PI_APP_SLUG || "chinese-c03891fab800c044";
 const APP_DOMAIN = process.env.PI_APP_DOMAIN || "https://chinesepi.vercel.app";
 
-// 健康检查
+// 健康检查（改进：返回更详细的配置信息）
 app.get('/api/health', (req, res) => {
+  const hasApiKey = !!PI_API_KEY;
+  const hasPrivKey = !!PI_APP_PRIV_KEY;
+  const hasConfig = hasApiKey && hasPrivKey;
+  
   res.json({
     status: "ok",
     environment: "sandbox",
-    hasConfig: !!PI_API_KEY && !!PI_APP_PRIV_KEY,
+    hasConfig: hasConfig,
+    configDetails: {
+      hasApiKey: hasApiKey,
+      hasPrivKey: hasPrivKey,
+      apiKeyLength: PI_API_KEY ? PI_API_KEY.length : 0,
+      privKeyLength: PI_APP_PRIV_KEY ? PI_APP_PRIV_KEY.length : 0
+    },
     appSlug: APP_SLUG,
     domain: APP_DOMAIN,
     timestamp: new Date().toISOString()
@@ -78,10 +88,15 @@ function generatePaymentSignature(paymentId, amount) {
 
 // 1. 批准支付（前端调用）- 修复：添加更详细的日志和错误处理
 app.post('/api/approve-payment', async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const { paymentId, amount } = req.body;
     
-    console.log(`[后端] 收到批准请求:`, { paymentId, amount });
+    console.log(`[后端] ========== 收到批准请求 ==========`);
+    console.log(`[后端] 支付ID: ${paymentId}`);
+    console.log(`[后端] 金额: ${amount}`);
+    console.log(`[后端] 时间: ${new Date().toISOString()}`);
     
     if (!paymentId) {
       return res.status(400).json({ 
@@ -92,18 +107,18 @@ app.post('/api/approve-payment', async (req, res) => {
 
     // 检查环境变量
     if (!PI_API_KEY) {
-      console.error("[后端] PI_API_KEY 未设置");
+      console.error("[后端] ❌ PI_API_KEY 未设置");
       return res.status(500).json({
         success: false,
-        error: "服务器配置错误：PI_API_KEY 未设置"
+        error: "服务器配置错误：PI_API_KEY 未设置。请在Vercel项目设置中添加此环境变量。"
       });
     }
 
     if (!PI_APP_PRIV_KEY) {
-      console.error("[后端] PI_APP_PRIV_KEY 未设置");
+      console.error("[后端] ❌ PI_APP_PRIV_KEY 未设置");
       return res.status(500).json({
         success: false,
-        error: "服务器配置错误：PI_APP_PRIV_KEY 未设置"
+        error: "服务器配置错误：PI_APP_PRIV_KEY 未设置。请在Vercel项目设置中添加此环境变量。"
       });
     }
 
@@ -111,6 +126,7 @@ app.post('/api/approve-payment', async (req, res) => {
     let paymentAmount = amount;
     if (!paymentAmount && paymentsCache[paymentId]) {
       paymentAmount = paymentsCache[paymentId].amount;
+      console.log(`[后端] 从缓存获取金额: ${paymentAmount}`);
     }
     
     // 如果还是没有，从 Pi API 获取
@@ -126,13 +142,16 @@ app.post('/api/approve-payment', async (req, res) => {
         if (statusRes.ok) {
           const statusData = await statusRes.json();
           paymentAmount = statusData.amount;
-          console.log(`[后端] 从Pi API获取到金额: ${paymentAmount}`);
+          console.log(`[后端] ✅ 从Pi API获取到金额: ${paymentAmount}`);
         } else {
-          const errorData = await statusRes.json();
-          console.error(`[后端] 获取支付信息失败:`, errorData);
+          const errorData = await statusRes.json().catch(() => ({}));
+          console.error(`[后端] ❌ 获取支付信息失败:`, {
+            status: statusRes.status,
+            data: errorData
+          });
         }
       } catch (err) {
-        console.error("[后端] 获取支付信息异常:", err);
+        console.error("[后端] ❌ 获取支付信息异常:", err.message);
       }
     }
     
@@ -147,16 +166,17 @@ app.post('/api/approve-payment', async (req, res) => {
     let signature;
     try {
       signature = generatePaymentSignature(paymentId, paymentAmount);
+      console.log(`[后端] ✅ 签名生成成功`);
     } catch (signErr) {
-      console.error(`[后端] 签名生成失败:`, signErr);
+      console.error(`[后端] ❌ 签名生成失败:`, signErr);
       return res.status(500).json({
         success: false,
-        error: `签名生成失败: ${signErr.message}`
+        error: `签名生成失败: ${signErr.message}。请检查PI_APP_PRIV_KEY格式是否正确。`
       });
     }
 
     // 调用Pi API批准支付
-    console.log(`[后端] 调用Pi API批准支付: ${paymentId}`);
+    console.log(`[后端] 调用Pi API批准支付...`);
     const approveRes = await fetch(`${PI_API_BASE}/payments/${paymentId}/approve`, {
       method: "POST",
       headers: {
@@ -177,7 +197,7 @@ app.post('/api/approve-payment', async (req, res) => {
     const approveData = await approveRes.json();
     
     if (!approveRes.ok) {
-      console.error(`[后端] Pi API批准失败:`, {
+      console.error(`[后端] ❌ Pi API批准失败:`, {
         status: approveRes.status,
         statusText: approveRes.statusText,
         data: approveData
@@ -185,11 +205,17 @@ app.post('/api/approve-payment', async (req, res) => {
       return res.status(approveRes.status).json({
         success: false,
         error: `支付批准失败: ${approveData.error || approveData.message || approveRes.statusText || '未知错误'}`,
-        details: approveData
+        details: approveData,
+        debug: {
+          paymentId: paymentId,
+          amount: paymentAmount,
+          hasSignature: !!signature
+        }
       });
     }
 
-    console.log(`[后端] 批准成功: ${paymentId}`);
+    const duration = Date.now() - startTime;
+    console.log(`[后端] ✅ 批准成功: ${paymentId} (耗时: ${duration}ms)`);
     
     // 更新缓存状态
     paymentsCache[paymentId] = {
@@ -206,10 +232,12 @@ app.post('/api/approve-payment', async (req, res) => {
     });
     
   } catch (err) {
-    console.error("[后端] 批准支付异常:", err);
+    const duration = Date.now() - startTime;
+    console.error(`[后端] ❌ 批准支付异常 (耗时: ${duration}ms):`, err);
     res.status(500).json({ 
       success: false, 
-      error: err.message || "服务器内部错误"
+      error: err.message || "服务器内部错误",
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
   }
 });
@@ -377,17 +405,41 @@ app.get('/api/payments', (req, res) => {
   });
 });
 
+// 6. 测试接口：测试配置
+app.get('/api/test-config', (req, res) => {
+  res.json({
+    success: true,
+    config: {
+      hasApiKey: !!PI_API_KEY,
+      hasPrivKey: !!PI_APP_PRIV_KEY,
+      apiKeyPrefix: PI_API_KEY ? PI_API_KEY.substring(0, 10) + '...' : '未设置',
+      privKeyPrefix: PI_APP_PRIV_KEY ? PI_APP_PRIV_KEY.substring(0, 20) + '...' : '未设置',
+      appSlug: APP_SLUG,
+      domain: APP_DOMAIN
+    }
+  });
+});
+
 // 启动服务
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`
 ✅ Pi支付后端启动成功
 📡 端口: ${PORT}
-🔑 API Key: ${PI_API_KEY ? '已设置' : '❌ 未设置'}
-🔐 私钥: ${PI_APP_PRIV_KEY ? '已设置' : '❌ 未设置'}
+🔑 API Key: ${PI_API_KEY ? '✅ 已设置 (' + PI_API_KEY.length + ' 字符)' : '❌ 未设置'}
+🔐 私钥: ${PI_APP_PRIV_KEY ? '✅ 已设置 (' + PI_APP_PRIV_KEY.length + ' 字符)' : '❌ 未设置'}
 🌐 域名: ${APP_DOMAIN}
 🔧 环境: sandbox
   `);
+  
+  if (!PI_API_KEY || !PI_APP_PRIV_KEY) {
+    console.log(`
+⚠️  警告：环境变量未完整配置！
+请在Vercel项目设置中添加以下环境变量：
+- PI_API_KEY
+- PI_APP_PRIV_KEY
+    `);
+  }
 });
 
 module.exports = app;
