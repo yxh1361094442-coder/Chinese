@@ -48,41 +48,62 @@ const termDictionary = {
     }
 };
 
+// 后端配置状态
+let backendConfigOk = false;
+
 // 页面加载完成初始化
 document.addEventListener('DOMContentLoaded', () => {
     // 初始化Pi SDK（必须开启sandbox: true，解决支付超时）
-    Pi.init({ 
-        version: "2.0", 
-        sandbox: true 
-    });
-    
-    console.log("Pi SDK 初始化完成");
+    try {
+        Pi.init({ 
+            version: "2.0", 
+            sandbox: true 
+        });
+        console.log("✅ Pi SDK 初始化完成");
+    } catch (err) {
+        console.error("❌ Pi SDK 初始化失败:", err);
+        showMessage("Pi SDK 初始化失败，请刷新页面重试", "error");
+    }
     
     // 绑定事件
     document.getElementById('authBtn').addEventListener('click', authenticateUser);
     document.getElementById('queryBtn').addEventListener('click', handleQuery);
     document.getElementById('termInput').addEventListener('input', toggleQueryBtn);
     
-    // 检查后端连接
+    // 检查后端连接和配置
     checkBackendConnection();
 });
 
-// 检查后端连接
+// 检查后端连接和配置
 async function checkBackendConnection() {
     try {
+        showMessage("正在检查后端连接...");
         const res = await fetch(`${BACKEND_URL}/api/health`);
         const data = await res.json();
+        
         if (data.status === 'ok') {
-            console.log("后端连接正常", data);
+            console.log("✅ 后端连接正常", data);
+            backendConfigOk = data.hasConfig;
+            
             if (!data.hasConfig) {
-                showMessage("警告：后端环境变量未配置完整，支付功能可能无法使用", "error");
+                showMessage("⚠️ 警告：后端环境变量未配置完整（PI_API_KEY 或 PI_APP_PRIV_KEY），支付功能将无法使用。请在Vercel项目设置中配置这些环境变量。", "error");
+            } else {
+                showMessage("✅ 后端配置正常，可以开始使用", "success");
+                setTimeout(() => {
+                    const el = document.getElementById('paymentInfo');
+                    if (el.textContent.includes("后端配置正常")) {
+                        el.style.display = "none";
+                    }
+                }, 3000);
             }
         } else {
-            console.warn("后端状态异常");
+            console.warn("⚠️ 后端状态异常:", data);
+            showMessage("⚠️ 后端状态异常，支付功能可能无法使用", "error");
         }
     } catch (err) {
-        console.error("无法连接到后端:", err);
-        showMessage("警告：无法连接到后端服务器，支付功能可能无法使用", "error");
+        console.error("❌ 无法连接到后端:", err);
+        showMessage(`❌ 无法连接到后端服务器：${err.message}。请检查后端是否正常运行。`, "error");
+        backendConfigOk = false;
     }
 }
 
@@ -100,7 +121,7 @@ async function authenticateUser() {
         isAuthenticated = true;
         currentUser = authResult.user;
         document.getElementById('authStatus').innerHTML = `<p style="margin-top: 10px; color: #2f855a;">✅ 已授权：${currentUser.username}</p>`;
-        showMessage("授权成功！", "success");
+        showMessage("✅ 授权成功！", "success");
         
         // 解锁输入框和查询按钮
         document.getElementById('termInput').disabled = false;
@@ -110,7 +131,7 @@ async function authenticateUser() {
         authBtn.disabled = true;
         
     } catch (error) {
-        showMessage(`授权失败：${error.message}`, "error");
+        showMessage(`❌ 授权失败：${error.message}`, "error");
         console.error("授权错误：", error);
         document.getElementById('authBtn').disabled = false;
     }
@@ -126,17 +147,32 @@ async function handleQuery() {
     }
     
     if (!termDictionary[term]) {
-        return showMessage(`未找到术语"${term}"，请检查拼写！`, "error");
+        return showMessage(`未找到术语"${term}"，请检查拼写！支持的术语：node, mining, staking, testnet, mainnet等`, "error");
     }
     
     if (!isAuthenticated) {
         return showMessage("请先授权Pi账号！", "error");
     }
 
+    // 🔥 关键：支付前检查后端配置
+    if (!backendConfigOk) {
+        const confirmRetry = confirm("后端配置可能有问题，是否继续尝试支付？\n\n如果失败，请检查Vercel环境变量配置。");
+        if (!confirmRetry) {
+            return;
+        }
+        // 重新检查一次
+        await checkBackendConnection();
+        if (!backendConfigOk) {
+            return showMessage("❌ 后端配置未完成，无法进行支付。请在Vercel中配置 PI_API_KEY 和 PI_APP_PRIV_KEY 环境变量。", "error");
+        }
+    }
+
     try {
         const queryBtn = document.getElementById('queryBtn');
         queryBtn.disabled = true;
         showMessage("正在创建支付请求...");
+        
+        console.log(`[支付] 开始创建支付，术语: ${term}`);
         
         // 创建Pi支付（直接使用Pi SDK，不需要先调用后端）
         const payment = await Pi.createPayment(
@@ -148,44 +184,53 @@ async function handleQuery() {
             {
                 // 🔥 关键修复：必须返回 Promise，确保异步操作完成
                 onReadyForServerApproval: async (paymentId) => {
-                    console.log("支付已创建，等待服务器批准:", paymentId);
+                    console.log(`[支付] 支付已创建，等待服务器批准: ${paymentId}`);
+                    showMessage(`支付已创建（ID: ${paymentId.substring(0, 8)}...），正在批准...`);
+                    
                     try {
                         await serverApprovePayment(paymentId, term);
+                        console.log(`[支付] 批准成功: ${paymentId}`);
                     } catch (err) {
-                        console.error("批准支付失败:", err);
-                        showMessage(`批准失败：${err.message}`, "error");
+                        console.error(`[支付] 批准失败:`, err);
+                        const errorMsg = err.message || "未知错误";
+                        showMessage(`❌ 批准失败：${errorMsg}`, "error");
                         queryBtn.disabled = false;
                         throw err; // 重新抛出错误，让Pi SDK知道批准失败
                     }
                 },
                 onReadyForServerCompletion: async (paymentId, txid) => {
-                    console.log("支付已完成，等待服务器确认:", paymentId, txid);
+                    console.log(`[支付] 支付已完成，等待服务器确认: ${paymentId}, txid: ${txid}`);
+                    showMessage("支付已完成，正在确认...");
+                    
                     try {
                         await serverCompletePayment(paymentId, txid, term);
+                        console.log(`[支付] 确认成功: ${paymentId}`);
                     } catch (err) {
-                        console.error("完成支付失败:", err);
-                        showMessage(`完成失败：${err.message}`, "error");
+                        console.error(`[支付] 确认失败:`, err);
+                        showMessage(`❌ 确认失败：${err.message}`, "error");
                         queryBtn.disabled = false;
                     }
                 },
                 onCancel: () => {
-                    console.log("支付已取消");
+                    console.log("[支付] 用户取消了支付");
                     showMessage("支付已取消", "error");
                     queryBtn.disabled = false;
                 },
                 onError: (err) => {
-                    console.error("支付错误:", err);
-                    showMessage(`支付错误：${err.message || err}`, "error");
+                    console.error("[支付] 支付过程出错:", err);
+                    const errorMsg = err.message || err.toString() || "未知错误";
+                    showMessage(`❌ 支付错误：${errorMsg}`, "error");
                     queryBtn.disabled = false;
                 }
             }
         );
         
-        console.log("支付对象创建成功:", payment);
+        console.log("[支付] 支付对象创建成功:", payment);
         
     } catch (error) {
-        console.error("支付创建失败:", error);
-        showMessage(`支付创建失败：${error.message || error}`, "error");
+        console.error("[支付] 支付创建失败:", error);
+        const errorMsg = error.message || error.toString() || "未知错误";
+        showMessage(`❌ 支付创建失败：${errorMsg}`, "error");
         document.getElementById('queryBtn').disabled = false;
     }
 }
@@ -196,30 +241,44 @@ async function serverApprovePayment(paymentId, term) {
         showMessage("正在批准支付...");
         console.log(`[前端] 开始批准支付: ${paymentId}`);
         
+        // 添加超时控制（30秒）
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        
         const res = await fetch(`${BACKEND_URL}/api/approve-payment`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 
                 paymentId: paymentId,
                 amount: 0.01
-            })
+            }),
+            signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
         
         const data = await res.json();
         
         if (!res.ok) {
             const errorMsg = data.error || `HTTP ${res.status}: 审批失败`;
-            console.error(`[前端] 批准失败:`, errorMsg, data);
+            console.error(`[前端] 批准失败:`, {
+                status: res.status,
+                error: errorMsg,
+                details: data
+            });
             throw new Error(errorMsg);
         }
         
         console.log("[前端] 支付已批准:", paymentId, data);
-        showMessage("支付已批准，等待完成...");
+        showMessage("✅ 支付已批准，等待完成...");
         
         return data; // 返回结果，确保Promise正确解析
         
     } catch (err) {
         console.error("[前端] 审批支付异常:", err);
+        if (err.name === 'AbortError') {
+            throw new Error("批准请求超时（30秒），请检查网络连接或后端服务");
+        }
         throw err; // 重新抛出，让调用者处理
     }
 }
@@ -230,25 +289,36 @@ async function serverCompletePayment(paymentId, txid, term) {
         showMessage("正在完成支付...");
         console.log(`[前端] 开始完成支付: ${paymentId}, txid: ${txid}`);
         
+        // 添加超时控制（30秒）
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        
         const res = await fetch(`${BACKEND_URL}/api/complete-payment`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 
                 paymentId: paymentId, 
                 txid: txid 
-            })
+            }),
+            signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
         
         const data = await res.json();
         
         if (!res.ok) {
             const errorMsg = data.error || `HTTP ${res.status}: 完成支付失败`;
-            console.error(`[前端] 完成失败:`, errorMsg, data);
+            console.error(`[前端] 完成失败:`, {
+                status: res.status,
+                error: errorMsg,
+                details: data
+            });
             throw new Error(errorMsg);
         }
         
         console.log("[前端] 支付完成:", paymentId, data);
-        showMessage("支付成功！", "success");
+        showMessage("🎉 支付成功！", "success");
         
         // 显示术语释义
         displayDefinition(term);
@@ -260,6 +330,9 @@ async function serverCompletePayment(paymentId, txid, term) {
         
     } catch (err) {
         console.error("[前端] 完成支付异常:", err);
+        if (err.name === 'AbortError') {
+            throw new Error("完成请求超时（30秒），请检查网络连接或后端服务");
+        }
         throw err;
     }
 }
