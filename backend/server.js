@@ -14,8 +14,8 @@ const paymentsCache = {};
 const PI_API_KEY = process.env.PI_API_KEY;
 const PI_APP_PRIV_KEY = process.env.PI_APP_PRIV_KEY;
 const PI_API_BASE = "https://api.sandbox.minepi.com/v2";
-const APP_SLUG = process.env.PI_APP_SLUG || "chinese-c03891fab800c044";
-const APP_DOMAIN = process.env.PI_APP_DOMAIN || "https://chinesepi.vercel.app";
+const APP_SLUG = process.env.APP_SLUG || "chinese-c03891fab800c044";
+const APP_DOMAIN = process.env.APP_DOMAIN || "https://chinesepi.vercel.app";
 
 // 健康检查（改进：返回更详细的配置信息）
 app.get('/api/health', (req, res) => {
@@ -39,7 +39,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// 生成支付签名（修复：改进签名生成逻辑）
+// 生成支付签名（优化：统一私钥处理逻辑+更详细错误提示）
 function generatePaymentSignature(paymentId, amount) {
   if (!PI_APP_PRIV_KEY) {
     throw new Error("PI_APP_PRIV_KEY 环境变量未设置");
@@ -48,45 +48,39 @@ function generatePaymentSignature(paymentId, amount) {
   const signStr = `${paymentId}_${amount}`;
   console.log(`[签名] 签名字符串: ${signStr}`);
   
-  const sign = crypto.createSign('sha256');
-  sign.update(signStr);
-  sign.end();
-
+  // 统一私钥处理逻辑
   let privateKey = PI_APP_PRIV_KEY.trim();
+  const isPEMFormat = privateKey.includes('-----BEGIN');
   
-  // 处理私钥格式
-  if (!privateKey.includes('-----BEGIN')) {
-    // 如果私钥不包含PEM头，尝试添加
-    // Pi Network通常提供的是base64编码的原始私钥
-    const keyWithoutSpaces = privateKey.replace(/\s/g, '');
-    privateKey = `-----BEGIN EC PRIVATE KEY-----\n${keyWithoutSpaces}\n-----END EC PRIVATE KEY-----`;
-  }
-
   try {
-    const signature = sign.sign(privateKey, 'base64');
-    console.log(`[签名] 签名生成成功 (PEM格式)`);
+    const sign = crypto.createSign('sha256');
+    sign.update(signStr);
+    sign.end();
+
+    // 根据格式选择签名方式
+    let signature;
+    if (isPEMFormat) {
+      signature = sign.sign(privateKey, 'base64');
+    } else {
+      // 处理原始base64私钥
+      const keyWithoutSpaces = privateKey.replace(/\s/g, '');
+      const rawKey = Buffer.from(keyWithoutSpaces, 'base64');
+      signature = sign.sign({ key: rawKey, format: 'der', type: 'secp256k1' }, 'base64');
+    }
+    
+    console.log(`[签名] 签名生成成功 (${isPEMFormat ? 'PEM' : '原始'}格式)`);
     return signature;
   } catch (signErr) {
-    // 如果PEM格式失败，尝试原始格式
-    console.warn(`[签名] PEM格式失败: ${signErr.message}，尝试原始格式`);
-    try {
-      const sign2 = crypto.createSign('sha256');
-      sign2.update(signStr);
-      sign2.end();
-      // 尝试直接使用base64解码的私钥
-      const keyWithoutSpaces = PI_APP_PRIV_KEY.replace(/\s/g, '');
-      const rawKey = Buffer.from(keyWithoutSpaces, 'base64');
-      const signature = sign2.sign(rawKey, 'base64');
-      console.log(`[签名] 签名生成成功 (原始格式)`);
-      return signature;
-    } catch (signErr2) {
-      console.error(`[签名] 原始格式也失败: ${signErr2.message}`);
-      throw new Error(`签名生成失败: ${signErr2.message}`);
+    console.error(`[签名] 生成失败: ${signErr.message}`);
+    // 提供更具体的错误提示
+    if (signErr.message.includes('unsupported key format')) {
+      throw new Error(`私钥格式不支持，请使用secp256k1曲线的EC私钥（PEM或base64格式）`);
     }
+    throw new Error(`签名生成失败: ${signErr.message}`);
   }
 }
 
-// 1. 批准支付（前端调用）
+// 1. 批准支付（前端调用）- 修复：添加更详细的日志和错误处理
 app.post('/api/approve-payment', async (req, res) => {
   const startTime = Date.now();
   
