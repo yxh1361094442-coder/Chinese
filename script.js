@@ -154,7 +154,7 @@ async function handleQuery() {
         return showMessage("请先授权Pi账号！", "error");
     }
 
-    // 🔥 关键：支付前检查后端配置
+    // 支付前检查后端配置
     if (!backendConfigOk) {
         const confirmRetry = confirm("后端配置可能有问题，是否继续尝试支付？\n\n如果失败，请检查Vercel环境变量配置。");
         if (!confirmRetry) {
@@ -174,7 +174,7 @@ async function handleQuery() {
         
         console.log(`[支付] 开始创建支付，术语: ${term}`);
         
-        // 创建Pi支付（直接使用Pi SDK，不需要先调用后端）
+        // 创建Pi支付
         const payment = await Pi.createPayment(
             { 
                 amount: 0.01, 
@@ -182,7 +182,6 @@ async function handleQuery() {
                 metadata: { term: term } 
             },
             {
-                // 🔥 关键修复：必须返回 Promise，确保异步操作完成
                 onReadyForServerApproval: async (paymentId) => {
                     console.log(`[支付] 支付已创建，等待服务器批准: ${paymentId}`);
                     showMessage(`支付已创建（ID: ${paymentId.substring(0, 8)}...），正在批准...`);
@@ -195,7 +194,7 @@ async function handleQuery() {
                         const errorMsg = err.message || "未知错误";
                         showMessage(`❌ 批准失败：${errorMsg}`, "error");
                         queryBtn.disabled = false;
-                        throw err; // 重新抛出错误，让Pi SDK知道批准失败
+                        throw err;
                     }
                 },
                 onReadyForServerCompletion: async (paymentId, txid) => {
@@ -235,13 +234,13 @@ async function handleQuery() {
     }
 }
 
-// 3. 调用后端审批支付（修复：确保正确处理错误和超时）
+// 3. 调用后端审批支付
 async function serverApprovePayment(paymentId, term) {
     try {
         showMessage("正在批准支付...");
         console.log(`[前端] 开始批准支付: ${paymentId}`);
         
-        // 添加超时控制（30秒）
+        // 超时控制（30秒）
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
         
@@ -272,14 +271,14 @@ async function serverApprovePayment(paymentId, term) {
         console.log("[前端] 支付已批准:", paymentId, data);
         showMessage("✅ 支付已批准，等待完成...");
         
-        return data; // 返回结果，确保Promise正确解析
+        return data;
         
     } catch (err) {
         console.error("[前端] 审批支付异常:", err);
         if (err.name === 'AbortError') {
             throw new Error("批准请求超时（30秒），请检查网络连接或后端服务");
         }
-        throw err; // 重新抛出，让调用者处理
+        throw err;
     }
 }
 
@@ -289,7 +288,6 @@ async function serverCompletePayment(paymentId, txid, term) {
         showMessage("正在完成支付...");
         console.log(`[前端] 开始完成支付: ${paymentId}, txid: ${txid}`);
         
-        // 添加超时控制（30秒）
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
         
