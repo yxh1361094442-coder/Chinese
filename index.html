@@ -3,147 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>10分钟实现Pi支付 - 演示版</title>
+    <title>Pi 术语查询支付系统</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
-        .container { max-width: 500px; margin: 50px auto; padding: 20px; border: 1px solid #eee; border-radius: 8px; }
-        h1 { color: #2c3e50; margin-bottom: 20px; }
+        /* 保留你的样式并做了微调 */
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+        body { background-color: #f4f7f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { max-width: 450px; width: 90%; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        h1 { color: #5a2d82; text-align: center; margin-bottom: 25px; font-size: 24px; }
         button { 
-            background: #007bff; color: white; border: none; padding: 10px 20px; 
-            border-radius: 4px; cursor: pointer; font-size: 16px; margin: 10px 0;
+            width: 100%; background: #5a2d82; color: white; border: none; padding: 12px; 
+            border-radius: 6px; cursor: pointer; font-size: 16px; margin: 10px 0; transition: 0.3s;
         }
-        button:hover { background: #0056b3; }
-        .input-group { margin: 15px 0; }
-        label { display: block; margin-bottom: 5px; color: #34495e; }
-        input { padding: 8px; width: 100%; max-width: 200px; border: 1px solid #ddd; border-radius: 4px; }
-        #status { margin-top: 20px; padding: 10px; border-radius: 4px; font-weight: bold; }
-        .success { background: #d4edda; color: #155724; }
-        .error { background: #f8d7da; color: #721c24; }
-        .pending { background: #fff3cd; color: #856404; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        button:hover:not(:disabled) { background: #452263; }
+        .input-group { margin: 20px 0; }
+        label { display: block; margin-bottom: 8px; color: #333; font-weight: bold; }
+        input { padding: 12px; width: 100%; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
+        #status { margin-top: 20px; padding: 12px; border-radius: 6px; font-size: 14px; display: none; text-align: center; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .pending { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        #definitionSection { margin-top: 20px; padding: 15px; background: #e9ecef; border-radius: 6px; display: none; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Pi 支付快速演示</h1>
+        <h1>Pi 术语百科查询</h1>
         
-        <!-- 登录按钮 -->
-        <button id="loginBtn">第一步：Pi账号登录</button>
+        <button id="loginBtn">第一步：Pi账号授权</button>
+        <div id="authStatus" style="text-align: center; font-size: 14px; margin-top: -5px;"></div>
         
-        <!-- 支付区域（登录后显示） -->
-        <div id="paymentArea" style="display: none;">
+        <div id="paymentArea" style="display: none; margin-top: 20px;">
             <div class="input-group">
-                <label>支付金额（Pi）：</label>
-                <input type="number" id="amount" value="0.1" min="0.01" step="0.01">
+                <label>输入术语 (如: node, mining):</label>
+                <input type="text" id="termInput" placeholder="请输入英文术语...">
             </div>
-            <button id="payBtn">第二步：发起Pi支付</button>
+            <p style="font-size: 12px; color: #666; margin-bottom: 10px;">查询费用: 0.01 Pi</p>
+            <button id="payBtn" disabled>第二步：支付并查询</button>
             
-            <!-- 支付状态提示 -->
             <div id="status"></div>
+            
+            <div id="definitionSection">
+                <div id="definition"></div>
+            </div>
         </div>
     </div>
 
-    <!-- 引入Pi官方SDK（核心依赖） -->
     <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+    <script src="script.js"></script>
 
     <script>
-        // ========== 核心配置（替换为你的应用ID） ==========
-        const PI_APP_ID = "YOUR_PI_APP_ID"; // 从Pi开发者门户获取
-        // ================================================
-
-        // 全局变量
-        let piUser = null;
-        const loginBtn = document.getElementById('loginBtn');
+        // 这里仅保留简单的 UI 逻辑，复杂的支付逻辑已移入 script.js 确保代码整洁
+        const termInput = document.getElementById('termInput');
         const payBtn = document.getElementById('payBtn');
-        const paymentArea = document.getElementById('paymentArea');
-        const statusEl = document.getElementById('status');
 
-        // 页面加载后初始化Pi SDK
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                // 初始化Pi SDK（官方帖子核心步骤）
-                await Pi.init({ version: "2.0", appId: PI_APP_ID });
-                console.log("✅ Pi SDK初始化成功");
-            } catch (error) {
-                showStatus(`SDK初始化失败：${error.message}`, 'error');
-                console.error("SDK初始化失败：", error);
-            }
+        termInput.addEventListener('input', () => {
+            payBtn.disabled = termInput.value.trim() === "";
         });
 
-        // 1. 处理Pi登录（官方帖子核心逻辑）
-        loginBtn.addEventListener('click', async () => {
-            try {
-                showStatus("正在跳转到Pi授权页面...", 'pending');
-                
-                // 调用Pi登录授权，申请payments权限
-                const auth = await Pi.authenticate(["username", "payments"], (authResult) => {
-                    if (authResult.status === "connected") {
-                        // 登录成功，保存用户信息
-                        piUser = authResult.user;
-                        showStatus(`✅ 登录成功！欢迎 ${piUser.username}`, 'success');
-                        // 显示支付区域
-                        paymentArea.style.display = "block";
-                        loginBtn.disabled = true;
-                    } else {
-                        showStatus("❌ 登录授权失败", 'error');
-                    }
-                });
-            } catch (error) {
-                showStatus(`登录失败：${error.message}`, 'error');
-                console.error("登录失败：", error);
-            }
-        });
-
-        // 2. 处理Pi支付（官方帖子核心逻辑）
-        payBtn.addEventListener('click', async () => {
-            if (!piUser) {
-                showStatus("请先完成Pi账号登录", 'error');
-                return;
-            }
-
-            const amount = parseFloat(document.getElementById('amount').value);
-            if (isNaN(amount) || amount <= 0) {
-                showStatus("请输入有效的支付金额（≥0.01 Pi）", 'error');
-                return;
-            }
-
-            try {
-                showStatus(`正在创建${amount} Pi的支付订单...`, 'pending');
-
-                // 调用Pi官方支付接口（帖子核心代码）
-                await Pi.createPayment({
-                    amount: amount,
-                    memo: "10分钟Pi支付演示订单", // 订单备注（可自定义）
-                    metadata: { orderId: Date.now().toString() }, // 自定义订单ID
-                    
-                    // 支付待服务器确认时的回调（核心）
-                    onReadyForServerApproval: async (payment) => {
-                        showStatus(`✅ 支付已提交！支付ID：${payment.paymentId}，交易ID：${payment.txid}`, 'success');
-                        console.log("支付待确认：", payment);
-                        // 【测试阶段】无需后端，正式环境需调用后端确认接口
-                        // 如：await fetch('/api/confirm-payment', { method: 'POST', body: JSON.stringify(payment) });
-                    },
-                    
-                    // 用户取消支付
-                    onCancel: () => {
-                        showStatus("❌ 用户取消了支付", 'error');
-                    },
-                    
-                    // 支付出错
-                    onError: (error) => {
-                        showStatus(`❌ 支付失败：${error.message}`, 'error');
-                        console.error("支付错误：", error);
-                    }
-                });
-            } catch (error) {
-                showStatus(`支付创建失败：${error.message}`, 'error');
-                console.error("支付创建失败：", error);
-            }
-        });
-
-        // 辅助函数：显示状态提示
         function showStatus(message, type) {
+            const statusEl = document.getElementById('status');
             statusEl.textContent = message;
             statusEl.className = type;
+            statusEl.style.display = "block";
         }
     </script>
 </body>
