@@ -139,23 +139,6 @@ header p {
   display: block;
 }
 
-/* 加载动画样式 */
-.loading {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid currentColor;
-  border-radius: 50%;
-  border-top-color: transparent;
-  animation: spin 1s linear infinite;
-  margin-right: 8px;
-  vertical-align: middle;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 /* 释义展示区域 */
 .definition-section {
   margin-top: 20px;
@@ -213,10 +196,5 @@ footer {
   .query-section input {
     padding: 10px 12px;
     font-size: 15px;
-  }
-  
-  .loading {
-    width: 14px;
-    height: 14px;
   }
 }
