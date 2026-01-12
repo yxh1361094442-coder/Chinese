@@ -1,72 +1,58 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pi 术语查询支付系统</title>
-    <style>
-        /* 保留你的样式并做了微调 */
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
-        body { background-color: #f4f7f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .container { max-width: 450px; width: 90%; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-        h1 { color: #5a2d82; text-align: center; margin-bottom: 25px; font-size: 24px; }
-        button { 
-            width: 100%; background: #5a2d82; color: white; border: none; padding: 12px; 
-            border-radius: 6px; cursor: pointer; font-size: 16px; margin: 10px 0; transition: 0.3s;
-        }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        button:hover:not(:disabled) { background: #452263; }
-        .input-group { margin: 20px 0; }
-        label { display: block; margin-bottom: 8px; color: #333; font-weight: bold; }
-        input { padding: 12px; width: 100%; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
-        #status { margin-top: 20px; padding: 12px; border-radius: 6px; font-size: 14px; display: none; text-align: center; }
-        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .pending { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-        #definitionSection { margin-top: 20px; padding: 15px; background: #e9ecef; border-radius: 6px; display: none; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pi术语查询 - 中文释义工具</title>
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- 🔥 关键修复：按照官方文档，SDK应该在head中初始化 -->
+  <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+  <script>
+    // 初始化Pi SDK（必须在head中，按照官方文档）
+    Pi.init({ version: "2.0", sandbox: true });
+  </script>
 </head>
 <body>
-    <div class="container">
-        <h1>Pi 术语百科查询</h1>
-        
-        <button id="loginBtn">第一步：Pi账号授权</button>
-        <div id="authStatus" style="text-align: center; font-size: 14px; margin-top: -5px;"></div>
-        
-        <div id="paymentArea" style="display: none; margin-top: 20px;">
-            <div class="input-group">
-                <label>输入术语 (如: node, mining):</label>
-                <input type="text" id="termInput" placeholder="请输入英文术语...">
-            </div>
-            <p style="font-size: 12px; color: #666; margin-bottom: 10px;">查询费用: 0.01 Pi</p>
-            <button id="payBtn" disabled>第二步：支付并查询</button>
-            
-            <div id="status"></div>
-            
-            <div id="definitionSection">
-                <div id="definition"></div>
-            </div>
-        </div>
+  <div class="container">
+    <header>
+      <h1>🔍 Pi术语查询</h1>
+      <p>支付0.01 Pi币查询Pi生态英文术语的中文释义</p>
+    </header>
+
+    <!-- 授权状态区域 -->
+    <div class="auth-status">
+      <button id="authBtn">点击授权Pi账号</button>
+      <div id="authStatus"></div>
     </div>
 
-    <script src="https://sdk.minepi.com/pi-sdk.js"></script>
-    <script src="script.js"></script>
+    <!-- 查询区域 -->
+    <div class="query-section">
+      <label for="termInput">输入要查询的术语：</label>
+      <input 
+        type="text" 
+        id="termInput" 
+        placeholder="例如：node, mining, staking..."
+        disabled
+      >
+      <button id="queryBtn" disabled>查询术语（支付0.01 Pi）</button>
+    </div>
 
-    <script>
-        // 这里仅保留简单的 UI 逻辑，复杂的支付逻辑已移入 script.js 确保代码整洁
-        const termInput = document.getElementById('termInput');
-        const payBtn = document.getElementById('payBtn');
+    <!-- 支付信息提示 -->
+    <div id="paymentInfo" class="payment-info"></div>
 
-        termInput.addEventListener('input', () => {
-            payBtn.disabled = termInput.value.trim() === "";
-        });
+    <!-- 释义展示区域 -->
+    <div id="definitionSection" class="definition-section">
+      <h2>📖 术语释义</h2>
+      <div id="definition"></div>
+    </div>
 
-        function showStatus(message, type) {
-            const statusEl = document.getElementById('status');
-            statusEl.textContent = message;
-            statusEl.className = type;
-            statusEl.style.display = "block";
-        }
-    </script>
+    <footer>
+      <p>使用 Pi Network 浏览器访问以获得最佳体验</p>
+    </footer>
+  </div>
+
+  <!-- 引入业务逻辑脚本 -->
+  <script src="script.js"></script>
 </body>
 </html>
