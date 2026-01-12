@@ -113,7 +113,7 @@ function onIncompletePaymentFound(payment) {
     
     // 如果支付已有txid，说明用户已付款但未确认，尝试完成
     if (payment.transaction && payment.transaction.txid) {
-        console.log("Attempting to complete stuck payment with txid...");
+        console.log(`[自动修复] 发现已付款但未确认的订单 (txid: ${payment.transaction.txid}), 正在恢复...`);
         showMessage("发现未完成的支付，正在尝试完成...", "warning");
         serverCompletePayment(payment.identifier, payment.transaction.txid, "restored_payment")
             .then(() => showMessage("✅ 之前的支付已成功修复！", "success"))
