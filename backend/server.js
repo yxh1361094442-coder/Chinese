@@ -133,7 +133,7 @@ app.post('/api/approve-payment', async (req, res) => {
     // 建议：在生产环境中，最好总是从Pi API获取以确保数据一致性
     if (!paymentAmount || true) {
       try {
-        console.log(`[后端] 从Pi API获取支付信息以确保准确: ${paymentId}`);
+        console.log(`[后端] 正在从Pi API同步支付信息: ${paymentId}`);
         const statusRes = await fetch(`${PI_API_BASE}/payments/${paymentId}`, {
           headers: { 
             "Authorization": `Key ${PI_API_KEY}`,
@@ -322,7 +322,7 @@ app.post('/api/cancel-payment', async (req, res) => {
 
     console.log(`[后端] 正在取消支付: ${paymentId}`);
 
-    // 调用Pi API取消支付
+    // 调用Pi API取消支付 (用于清理卡单)
     const cancelRes = await fetch(`${PI_API_BASE}/payments/${paymentId}/cancel`, {
       method: "POST",
       headers: {
